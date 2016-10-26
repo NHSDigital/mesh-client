@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+/MANIFEST
+/.tox/
+.idea/
+.venv/
+build/
+help/
+*.whl
+*.egg-info
+dist/
+.eggs/

@@ -4,6 +4,7 @@ import datetime
 import os.path
 import ssl
 from six.moves.urllib.request import Request, urlopen
+from six.moves.urllib.error import HTTPError
 from contextlib import closing
 import json
 from hashlib import sha256
@@ -16,6 +17,23 @@ default_client_context = ssl.create_default_context(
 default_client_context.load_cert_chain(
     os.path.join(_data_dir, 'client.cert.pem'),
     os.path.join(_data_dir, 'client.key.pem'))
+
+
+_OPTIONAL_HEADERS = {
+    "content_type": "Content-Type",
+    "workflow_id": "Mex-WorkflowID",
+    "filename": "Mex-FileName",
+    "local_id": "Mex-LocalID",
+    "message_type": "Mex-MessageType",
+    "process_id": "Mex-ProcessID",
+    "subject": "Mex-Subject",
+    "encrypted": "Mex-Encrypted",
+    "compressed": "Mex-Compressed"
+}
+
+
+class MeshError(Exception):
+    pass
 
 
 class MeshClient(object):
@@ -45,21 +63,38 @@ class MeshClient(object):
                                                     message_id),
             headers={"Authorization": self._token_generator()})
         return _Message(
-            message_id, urlopen(
-                req, context=self._ssl_context), self)
+            message_id, urlopen(req, context=self._ssl_context), self)
 
-    def send_message(self, recipient, data):
+    def send_message(self, recipient, data, **kwargs):
+        headers = {
+            "Authorization": self._token_generator(),
+            "Mex-From": self._mailbox,
+            "Mex-To": recipient
+        }
+        for key, value in kwargs.items():
+            if key in _OPTIONAL_HEADERS:
+                headers[_OPTIONAL_HEADERS[key]] = str(value)
+            else:
+                raise TypeError("Unrecognised keyword argument {key}."
+                                " optional arguments are: {args}".format(
+                                    key=key,
+                                    args=", ".join(
+                                        ["recipient", "data"] +
+                                        list(_OPTIONAL_HEADERS.keys()))
+                                ))
         req = Request(
             "{}/messageexchange/{}/outbox".format(self._url, self._mailbox),
-            data,
-            headers={
-                "Authorization": self._token_generator(),
-                "Mex-From": self._mailbox,
-                "Mex-To": recipient,
-                "Mex-LocalID": self._mailbox
-            })
-        with closing(urlopen(req, context=self._ssl_context)) as resp:
-            return json.load(resp)["messageID"]
+            data, headers=headers)
+        try:
+            resp = urlopen(req, context=self._ssl_context)
+        except HTTPError as e:
+            resp = e
+
+        with closing(resp):
+            json_resp = json.load(resp)
+            if resp.code == 417 or "errorDescription" in json_resp:
+                raise MeshError(json_resp["errorDescription"], json_resp)
+            return json_resp["messageID"]
 
     def acknowledge_message(self, message_id):
         message_id = getattr(message_id, "_msg_id", message_id)
@@ -83,6 +118,9 @@ class _Message(object):
         self._msg_id = msg_id
         self._response = response
         self._client = client
+        headers = response.info()
+        for key, value in _OPTIONAL_HEADERS.items():
+            setattr(self, key, headers.get(value, None))
 
     def read(self, *args, **kwargs):
         return self._response.read(*args, **kwargs)

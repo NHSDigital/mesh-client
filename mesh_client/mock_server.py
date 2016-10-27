@@ -13,6 +13,19 @@ from wsgiref.util import shift_path_info
 from wsgiref.simple_server import make_server, WSGIServer
 
 
+_OPTIONAL_HEADERS = {
+    "CONTENT_TYPE": "Content-Type",
+    "HTTP_MEX_WORKFLOWID": "Mex-WorkflowID",
+    "HTTP_MEX_FILENAME": "Mex-FileName",
+    "HTTP_MEX_LOCALID": "Mex-LocalID",
+    "HTTP_MEX_MESSAGETYPE": "Mex-MessageType",
+    "HTTP_MEX_PROCESSID": "Mex-ProcessID",
+    "HTTP_MEX_SUBJECT": "Mex-Subject",
+    "HTTP_MEX_ENCRYPTED": "Mex-Encrypted",
+    "HTTP_MEX_COMPRESSED": "Mex-Compressed"
+}
+
+
 def _dumb_response_code(code, message):
     def handle(environ, start_response):
         start_response("{} {}".format(code, message),
@@ -91,8 +104,8 @@ class MockMeshApplication:
         if request_method == "GET":
             if message_id:
                 message = self.messages[mailbox][message_id]
-                return _ok("application/octet-stream", [message],
-                           start_response)
+                start_response("200 OK", list(message["headers"].items()))
+                return [message["data"]]
             else:
                 messages = {"messages": list(self.messages[mailbox].keys())}
                 return _ok("application/json",
@@ -111,20 +124,34 @@ class MockMeshApplication:
             sender = environ["HTTP_MEX_FROM"]
             mailbox_id = environ["mesh.mailbox"]
             assert mailbox_id == sender
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
             start_response("417 Expectation Failed",
-                           [("Content-Type", "text/plain")])
-            return [b"Expectation failed -"
-                    b" Mex-From and Mex-To headers required"]
+                           [('Content-Type', 'application/json')])
+            return [json.dumps({
+                "errorCode": "02",
+                "errorDescription": str(e),
+                "errorEvent": "COLLECT",
+                "messageID": "99999"})]
 
         mailbox = self.messages.setdefault(recipient, OrderedDict())
         content_length = environ.get("CONTENT_LENGTH")
         input_ = environ["wsgi.input"]
         data = (input_.read(int(content_length))
                 if content_length else input_.read())
+        if not data:
+            start_response("417 Expectation Failed",
+                           [('Content-Type', 'application/json')])
+            return [json.dumps({
+                "errorCode": "02",
+                "errorDescription": "Data file is missing or inaccessible.",
+                "errorEvent": "COLLECT",
+                "messageID": "99999"})]
+        headers = {_OPTIONAL_HEADERS[key]: value
+                   for key, value in environ.items()
+                   if key in _OPTIONAL_HEADERS}
         msg_id = str(uuid.uuid4())
-        mailbox[msg_id] = data
+        mailbox[msg_id] = {"headers": headers, "data": data}
         return _ok("application/json",
                    [json.dumps({"messageID": msg_id}).encode("UTF-8")],
                    start_response)
@@ -138,6 +165,7 @@ class MockMeshApplication:
 
     def __exit__(self, type, value, traceback):
         self.server.shutdown()
+
 
 _data_dir = os.path.dirname(__file__)
 default_server_context = ssl.create_default_context(

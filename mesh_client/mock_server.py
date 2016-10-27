@@ -5,7 +5,9 @@ import uuid
 import ssl
 import random
 import traceback
+import os.path
 from hashlib import sha256
+from collections import OrderedDict
 from threading import Thread
 from wsgiref.util import shift_path_info
 from wsgiref.simple_server import make_server, WSGIServer
@@ -16,6 +18,7 @@ def _dumb_response_code(code, message):
         start_response("{} {}".format(code, message),
                        [("Content-Type", "text/plain")])
         return [message.encode("UTF-8")]
+
     return handle
 
 
@@ -38,6 +41,7 @@ def _compose(**kwargs):
             return kwargs[path_component](environ, start_response)
         else:
             return _not_found(environ, start_response)
+
     return handle
 
 
@@ -63,25 +67,22 @@ class MockMeshApplication:
             hash_data = ":".join([
                 mailbox, nonce, nonce_count, expected_password, ts
             ])
-            myhash = hmac.HMAC(
-                self._shared_key,
-                hash_data.encode("ASCII"),
-                sha256
-            ).hexdigest()
+            myhash = hmac.HMAC(self._shared_key, hash_data.encode("ASCII"),
+                               sha256).hexdigest()
             if myhash == hashed and mailbox == requested_mailbox:
                 environ["mesh.mailbox"] = mailbox
                 return handler(environ, start_response)
             else:
                 return _forbidden(environ, start_response)
+
         return handle
 
     @property
     def message_exchange(self):
 
-        return self.authenticated(_compose(
-            inbox=self.inbox,
-            outbox=self.outbox
-        ))
+        return self.authenticated(
+            _compose(
+                inbox=self.inbox, outbox=self.outbox))
 
     def inbox(self, environ, start_response):
         request_method = environ["REQUEST_METHOD"]
@@ -90,16 +91,15 @@ class MockMeshApplication:
         if request_method == "GET":
             if message_id:
                 message = self.messages[mailbox][message_id]
-                return _ok(
-                    "application/octet-stream",
-                    [message], start_response)
+                return _ok("application/octet-stream", [message],
+                           start_response)
             else:
                 messages = {"messages": list(self.messages[mailbox].keys())}
-                return _ok(
-                    "application/json",
-                    [json.dumps(messages).encode("UTF-8")], start_response)
-        elif (request_method == "PUT"
-              and environ["PATH_INFO"] == "/status/acknowledged"):
+                return _ok("application/json",
+                           [json.dumps(messages).encode("UTF-8")],
+                           start_response)
+        elif (request_method == "PUT" and
+              environ["PATH_INFO"] == "/status/acknowledged"):
             del self.messages[mailbox][message_id]
             return _simple_ok(environ, start_response)
         else:
@@ -118,43 +118,47 @@ class MockMeshApplication:
             return [b"Expectation failed -"
                     b" Mex-From and Mex-To headers required"]
 
-        mailbox = self.messages.setdefault(recipient, {})
+        mailbox = self.messages.setdefault(recipient, OrderedDict())
         content_length = environ.get("CONTENT_LENGTH")
         input_ = environ["wsgi.input"]
-        data = (input_.read(int(content_length)) if content_length
-                else input_.read())
+        data = (input_.read(int(content_length))
+                if content_length else input_.read())
         msg_id = str(uuid.uuid4())
         mailbox[msg_id] = data
-        return _ok(
-            "application/json",
-            [json.dumps({"messageID": msg_id}).encode("UTF-8")],
-            start_response
-        )
+        return _ok("application/json",
+                   [json.dumps({"messageID": msg_id}).encode("UTF-8")],
+                   start_response)
 
     def __enter__(self):
         port = random.randint(32768, 65535)
         self.uri = "https://localhost:{}".format(port)
         self.server = make_server("", port, self, server_class=SSLWSGIServer)
-        Thread(target=self.server.serve_forever).start()
+        Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01}).start()
+        return self
 
     def __exit__(self, type, value, traceback):
         self.server.shutdown()
 
+_data_dir = os.path.dirname(__file__)
+default_server_context = ssl.create_default_context(
+    ssl.Purpose.SERVER_AUTH, cafile=os.path.join(_data_dir, "ca.cert.pem"))
+default_server_context.load_cert_chain(
+    os.path.join(_data_dir, 'server.cert.pem'),
+    os.path.join(_data_dir, 'server.key.pem'))
+default_server_context.check_hostname = False
+default_server_context.verify_mode = ssl.CERT_REQUIRED
 
-class SSLWSGIServer(WSGIServer):
-    __context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH,
-                                           cafile="ca.cert.pem")
-    __context.load_cert_chain('server.cert.pem', 'server.key.pem')
-    __context.check_hostname = False
-    __context.verify_mode = ssl.CERT_REQUIRED
+
+class SSLWSGIServer(WSGIServer, object):
+    __context = default_server_context
 
     def get_request(self):
-        (socket, addr) = super().get_request()
+        (socket, addr) = super(SSLWSGIServer, self).get_request()
         return (self.__context.wrap_socket(socket, server_side=True), addr)
 
 
 if __name__ == "__main__":
     print("Serving on port 8000")
-    server = make_server("", 8000, MockMeshApplication(),
-                         server_class=SSLWSGIServer)
-    server.serve_forever()
+    server = make_server(
+        "", 8000, MockMeshApplication(), server_class=SSLWSGIServer)
+    server.serve_forever(0.01)

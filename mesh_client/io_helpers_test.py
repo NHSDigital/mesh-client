@@ -4,7 +4,7 @@ import io
 import gzip
 import six
 import tempfile
-from .io_helpers import GzipInputStream, CombineStreams, SplitStream
+from .io_helpers import GzipCompressStream, GzipDecompressStream, CombineStreams, SplitStream
 from six.moves.urllib.parse import urljoin
 from six.moves.urllib.request import pathname2url, urlopen
 from contextlib import closing
@@ -24,9 +24,9 @@ small_chunk = 10
 
 
 class IOHelpersTest(TestCase):
-    def test_gzip_input_stream(self):
+    def test_gzip_compress_stream(self):
         underlying = io.BytesIO(b"This is a short test stream")
-        instance = GzipInputStream(underlying, block_size=4)
+        instance = GzipCompressStream(underlying, block_size=4)
         result = b""
         for i in range(1000):
             read_result = instance.read(i)
@@ -40,9 +40,9 @@ class IOHelpersTest(TestCase):
         test_decoder = gzip.GzipFile('', mode='r', fileobj=io.BytesIO(result))
         self.assertEqual(b"This is a short test stream", test_decoder.read())
 
-    def test_gzip_input_stream_read_all(self):
+    def test_gzip_compress_stream_read_all(self):
         underlying = io.BytesIO(b"This is a short test stream")
-        instance = GzipInputStream(underlying, block_size=4)
+        instance = GzipCompressStream(underlying, block_size=4)
         result = instance.read()
         self.assertEqual(b"", instance.read(10))
         self.assertEqual(b"", instance.read())
@@ -50,6 +50,39 @@ class IOHelpersTest(TestCase):
         # Decode with GzipFile
         test_decoder = gzip.GzipFile('', mode='r', fileobj=io.BytesIO(result))
         self.assertEqual(b"This is a short test stream", test_decoder.read())
+
+    def test_gzip_decompress_stream(self):
+        underlying = io.BytesIO()
+        gzwriter = gzip.GzipFile(fileobj=underlying, mode='w')
+        gzwriter.write(b"This is a short test stream")
+        gzwriter.close()
+        underlying.seek(0)
+
+        instance = GzipDecompressStream(underlying, block_size=4)
+        result = b""
+        for i in range(1000):
+            read_result = instance.read(i)
+            result += read_result
+            if len(read_result) < i:
+                break
+        self.assertEqual(b"", instance.read(10))
+        self.assertEqual(b"", instance.read())
+
+        self.assertEqual(b"This is a short test stream", result)
+
+    def test_gzip_decompress_stream_read_all(self):
+        underlying = io.BytesIO()
+        gzwriter = gzip.GzipFile(fileobj=underlying, mode='w')
+        gzwriter.write(b"This is a short test stream")
+        gzwriter.close()
+        underlying.seek(0)
+
+        instance = GzipDecompressStream(underlying, block_size=4)
+        result = instance.read()
+        self.assertEqual(b"", instance.read(10))
+        self.assertEqual(b"", instance.read())
+
+        self.assertEqual(b"This is a short test stream", result)
 
     def test_split_file(self):
         with tempfile.TemporaryFile() as f:

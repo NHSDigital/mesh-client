@@ -111,13 +111,12 @@ class MockMeshApplication:
             del self.messages[mailbox][message_id]
             return _simple_ok(environ, start_response)
 
-        chunk_msg = shift_path_info(environ)
-        print("Chunk message", chunk_msg)
-        if chunk_msg:
-            return self.download_chunk(chunk_msg)(environ, start_response)
-
         if request_method == "GET":
             if message_id:
+                chunk_num = shift_path_info(environ)
+                if chunk_num:
+                    return self.download_chunk(
+                        message_id, chunk_num)(environ, start_response)
                 message = self.messages[mailbox][message_id]
                 start_response("200 OK", list(message["headers"].items()))
                 return [message["data"]]
@@ -160,7 +159,7 @@ class MockMeshApplication:
                 "errorCode": "02",
                 "errorDescription": "Data file is missing or inaccessible.",
                 "errorEvent": "COLLECT",
-                "messageID": "99999"})]
+                "messageID": "99999"}).encode("utf-8")]
         headers = {_OPTIONAL_HEADERS[key]: value
                    for key, value in environ.items()
                    if key in _OPTIONAL_HEADERS}
@@ -185,9 +184,8 @@ class MockMeshApplication:
             return []
         return handle
 
-    def download_chunk(self, chunk_msg):
+    def download_chunk(self, chunk_msg, chunk_num):
         def handle(environ, start_response):
-            chunk_num = shift_path_info(environ)
             msg = self.messages[chunk_msg]
             chunks = msg["chunks"]
             chunk = chunks[chunk_num]
@@ -204,7 +202,8 @@ class MockMeshApplication:
         port = random.randint(32768, 65535)
         self.uri = "https://localhost:{}".format(port)
         self.server = make_server("", port, self, server_class=SSLWSGIServer)
-        Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01}).start()
+        Thread(target=self.server.serve_forever,
+               kwargs={"poll_interval": 0.01}).start()
         return self
 
     def __exit__(self, type, value, traceback):

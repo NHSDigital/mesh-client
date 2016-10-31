@@ -1,13 +1,18 @@
+from __future__ import absolute_import
+import codecs
 import uuid
 import hmac
 import datetime
 import os.path
 import ssl
+import six
 from six.moves.urllib.request import Request, urlopen
 from six.moves.urllib.error import HTTPError
 from contextlib import closing
+from itertools import chain
 import json
 from hashlib import sha256
+from .io_helpers import CombineStreams, SplitStream
 
 
 _data_dir = os.path.dirname(__file__)
@@ -31,6 +36,8 @@ _OPTIONAL_HEADERS = {
     "compressed": "Mex-Compressed"
 }
 
+_utf8_reader = codecs.getreader("utf-8")
+
 
 class MeshError(Exception):
     pass
@@ -42,19 +49,21 @@ class MeshClient(object):
                  mailbox,
                  password,
                  shared_key=b"BackBone",
-                 ssl_context=None):
+                 ssl_context=None,
+                 max_chunk_size=75 * 1024 * 1024):
         self._url = url
         self._mailbox = mailbox
         self._ssl_context = ssl_context
         self._token_generator = _AuthTokenGenerator(shared_key, mailbox,
                                                     password)
+        self._max_chunk_size = max_chunk_size
 
     def list_messages(self):
         req = Request(
             "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
             headers={"Authorization": self._token_generator()})
         with closing(urlopen(req, context=self._ssl_context)) as resp:
-            return json.loads(resp.read().decode("UTF-8"))["messages"]
+            return json.load(_utf8_reader(resp))["messages"]
 
     def retrieve_message(self, message_id):
         message_id = getattr(message_id, "_msg_id", message_id)
@@ -64,6 +73,14 @@ class MeshClient(object):
             headers={"Authorization": self._token_generator()})
         return _Message(
             message_id, urlopen(req, context=self._ssl_context), self)
+
+    def retrieve_message_chunk(self, message_id, chunk_num):
+        req = Request(
+            "{}/messageexchange/{}/inbox/{}/{}".format(
+                self._url, self._mailbox, message_id, chunk_num),
+            headers={"Authorization": self._token_generator()}
+        )
+        return urlopen(req, context=self._ssl_context)
 
     def send_message(self, recipient, data, **kwargs):
         headers = {
@@ -82,19 +99,52 @@ class MeshClient(object):
                                         ["recipient", "data"] +
                                         list(_OPTIONAL_HEADERS.keys()))
                                 ))
+
+        chunks = SplitStream(data, self._max_chunk_size)
+        headers["Mex-Chunk-Range"] = "1:{}".format(len(chunks))
+        chunk_iterator = iter(chunks)
+
+        chunk1 = six.next(chunk_iterator)
         req = Request(
             "{}/messageexchange/{}/outbox".format(self._url, self._mailbox),
-            data, headers=headers)
+            chunk1, headers=headers)
         try:
             resp = urlopen(req, context=self._ssl_context)
         except HTTPError as e:
             resp = e
 
         with closing(resp):
-            json_resp = json.load(resp)
+            json_resp = json.load(_utf8_reader(resp))
             if resp.code == 417 or "errorDescription" in json_resp:
                 raise MeshError(json_resp["errorDescription"], json_resp)
-            return json_resp["messageID"]
+            message_id = json_resp["messageID"]
+
+        for i, chunk in enumerate(chunk_iterator):
+            chunk_num = i + 2
+            headers = {
+                "Content-Type": "application/octet-stream",
+                "Mex-Chunk-Range": "{}:{}".format(chunk_num, len(chunks)),
+                "Mex-From": self._mailbox,
+                "Authorization": self._token_generator(),
+                "Content-Length": len(chunk)
+
+            }
+            print(headers)
+            req = Request(
+                "{}/messageexchange/{}/outbox/{}/{}".format(
+                    self._url, self._mailbox, message_id, chunk_num),
+                chunk, headers=headers)
+
+            try:
+                resp = urlopen(req, context=self._ssl_context)
+            except HTTPError as e:
+                resp = e
+                raise
+            finally:
+                if resp:
+                    resp.close()
+
+        return message_id
 
     def acknowledge_message(self, message_id):
         message_id = getattr(message_id, "_msg_id", message_id)
@@ -116,11 +166,16 @@ class MeshClient(object):
 class _Message(object):
     def __init__(self, msg_id, response, client):
         self._msg_id = msg_id
-        self._response = response
         self._client = client
         headers = response.info()
         for key, value in _OPTIONAL_HEADERS.items():
             setattr(self, key, headers.get(value, None))
+        chunk, chunk_count = map(int, headers["Mex-Chunk-Range"].split(":"))
+        self._response = CombineStreams(chain(
+            [response],
+            (client.retrieve_message_chunk(msg_id, str(i + 2))
+             for i in range(chunk_count - 1))
+        ))
 
     def read(self, *args, **kwargs):
         return self._response.read(*args, **kwargs)

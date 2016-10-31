@@ -1,28 +1,29 @@
 from __future__ import division
 import io
-import itertools
-import mmap
 import os
 import zlib
 import six
 
 
-class GzipInputStream(object):
+class AbstractGzipStream(object):
     """
     Wrap an existing readable, in a readable that produces a gzipped
     version of the underlying stream.
     """
     def __init__(self, underlying, block_size=65536):
         self._underlying = underlying
-        self._compress_obj = zlib.compressobj(
-            9,  # level
-            zlib.DEFLATED,  # method
-            31  # wbits - gzip header, maximum window
-        )
         self._buffer = io.BytesIO()
         self._block_size = block_size
 
+    def _process_block(self, block):
+        raise NotImplementedError()
+
+    def _finish(self):
+        raise NotImplementedError()
+
     def read(self, n=-1):
+        if n == -1:
+            n = None
         while True:
             # If underlying stream finished, just read from buffer
             if self._underlying is None:
@@ -42,9 +43,9 @@ class GzipInputStream(object):
             else:
                 next_block = self._underlying.read(self._block_size)
                 if len(next_block) > 0:
-                    self._buffer.write(self._compress_obj.compress(next_block))
+                    self._buffer.write(self._process_block(next_block))
                 else:
-                    self._buffer.write(self._compress_obj.flush(zlib.Z_FINISH))
+                    self._buffer.write(self._finish())
                     self._buffer.seek(0)
                     self._underlying.close()
                     self._underlying = None
@@ -67,6 +68,44 @@ class GzipInputStream(object):
         self.close()
 
 
+class GzipCompressStream(AbstractGzipStream):
+    """
+    Wrap an existing readable, in a readable that produces a gzipped
+    version of the underlying stream.
+    """
+    def __init__(self, underlying, block_size=65536):
+        AbstractGzipStream.__init__(self, underlying, block_size)
+        self._compress_obj = zlib.compressobj(
+            9,  # level
+            zlib.DEFLATED,  # method
+            31  # wbits - gzip header, maximum window
+        )
+
+    def _process_block(self, block):
+        return self._compress_obj.compress(block)
+
+    def _finish(self):
+        return self._compress_obj.flush(zlib.Z_FINISH)
+
+
+class GzipDecompressStream(AbstractGzipStream):
+    """
+    Wrap an existing readable, in a readable that decompresses
+    the underlying stream.
+    """
+    def __init__(self, underlying, block_size=65536):
+        AbstractGzipStream.__init__(self, underlying, block_size)
+        self._decompress_obj = zlib.decompressobj(
+            47  # wbits - detect header, maximum window
+        )
+
+    def _process_block(self, block):
+        return self._decompress_obj.decompress(block)
+
+    def _finish(self):
+        return self._decompress_obj.flush()
+
+
 class SplitStream(object):
     def __init__(self, data, chunk_size=75 * 1024 * 1024):
         if isinstance(data, bytes):
@@ -84,7 +123,8 @@ class SplitStream(object):
         self._remaining = 0
 
     def __len__(self):
-        return (self._length + self._chunk_size - 1) // self._chunk_size
+        return max(
+            1, (self._length + self._chunk_size - 1) // self._chunk_size)
 
     def __iter__(self):
         for i in range(len(self)):
@@ -102,12 +142,17 @@ class _SplitChunk(object):
         self._owner = owner
 
     def read(self, n=-1):
-        if n == -1 or n is None:
+        if n == -1:
+            n = None
+        if n is None or n > self._owner._remaining:
             n = self._owner._remaining
         try:
             return self._owner._underlying.read(n)
         finally:
             self._owner._remaining -= n
+
+    def __len__(self):
+        return self._owner._remaining
 
 
 class CombineStreams(object):
@@ -116,13 +161,26 @@ class CombineStreams(object):
         self._current_stream = six.next(self._streams)
 
     def read(self, n=-1):
+        if n == -1:
+            n = None
         result = io.BytesIO()
         try:
             while True:
                 result.write(self._current_stream.read(n))
-                if n == -1 or n is None or result.tell() < n:
+                if n is None or result.tell() < n:
+                    self._close_current_stream()
                     self._current_stream = six.next(self._streams)
                 else:
                     return result.getvalue()
         except StopIteration:
+            self._current_stream = io.BytesIO()  # Empty stream
             return result.getvalue()
+
+    def close(self):
+        self._close_current_stream()
+
+    def _close_current_stream(self):
+        try:
+            self._current_stream.close()
+        except:
+            pass

@@ -1,5 +1,8 @@
+from __future__ import absolute_import, print_function
 from unittest import TestCase, main
-import os
+import signal
+import traceback
+import sys
 from mesh_client import MeshClient, MeshError, default_client_context
 from mesh_client.mock_server import MockMeshApplication
 from six.moves.urllib.error import HTTPError
@@ -11,7 +14,15 @@ bob_mailbox = 'bob'
 bob_password = 'password'
 
 
-class TestError(StandardError):
+def print_stack_frames(signum=None, frame=None):
+    for frame in sys._current_frames().values():
+        traceback.print_stack(frame)
+        print()
+
+signal.signal(signal.SIGUSR1, print_stack_frames)
+
+
+class TestError(Exception):
     pass
 
 
@@ -22,12 +33,18 @@ class MeshClientTest(TestCase):
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
                 self.alice = MeshClient(self.uri, alice_mailbox, alice_password,
-                                        ssl_context=default_client_context)
+                                        ssl_context=default_client_context, max_chunk_size=5)
                 self.bob = MeshClient(self.uri, bob_mailbox, bob_password,
-                                      ssl_context=default_client_context)
+                                      ssl_context=default_client_context, max_chunk_size=5)
                 super(MeshClientTest, self).run(result)
         except HTTPError as e:
-            print e.read()
+            print(e.read())
+            print_stack_frames()
+            print("Message store", self.mock_app.messages)
+            raise
+        except:
+            print_stack_frames()
+            print("Message store", self.mock_app.messages)
             raise
 
     def test_send_receive(self):

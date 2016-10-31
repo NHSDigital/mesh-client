@@ -67,49 +67,47 @@ class GzipInputStream(object):
         self.close()
 
 
-class SplitFile(object):
-    def __init__(self, f, chunk_size=75 * 1024 * 1024):
-        self._fd = f.fileno()
-        self._chunk_size = ((chunk_size // mmap.ALLOCATIONGRANULARITY)
-                            * mmap.ALLOCATIONGRANULARITY)
-
-    def __len__(self):
-        return ((os.fstat(self._fd).st_size + self._chunk_size - 1)
-                // self._chunk_size)
-
-    def __iter__(self):
-        size = os.fstat(self._fd).st_size
-        for i in itertools.count():
-            if i * self._chunk_size >= size:
-                break
-            chunk_start = i * self._chunk_size
-            current_chunk_size = min(self._chunk_size, size - chunk_start)
-            m = mmap.mmap(self._fd, current_chunk_size,
-                          access=mmap.ACCESS_READ, offset=chunk_start)
-            try:
-                yield m
-            finally:
-                m.close()
-
-
-class SplitBytes(object):
+class SplitStream(object):
     def __init__(self, data, chunk_size=75 * 1024 * 1024):
-        self._data = data
+        if isinstance(data, bytes):
+            self._underlying = io.BytesIO(data)
+            self._length = len(data)
+        elif hasattr(data, "info"):
+            self._underlying = data
+            self._length = int(data.info()["Content-Length"])
+        elif hasattr(data, "fileno"):
+            self._underlying = data
+            self._length = os.fstat(data.fileno()).st_size
+        else:
+            raise TypeError("data must be a bytes, file, or urllib response")
         self._chunk_size = chunk_size
+        self._remaining = 0
 
     def __len__(self):
-        return ((len(self._data) + self._chunk_size - 1)
-                // self._chunk_size)
+        return (self._length + self._chunk_size - 1) // self._chunk_size
 
     def __iter__(self):
-        size = len(self._data)
-        for i in itertools.count():
-            if i * self._chunk_size >= size:
-                break
-            chunk_start = i * self._chunk_size
-            current_chunk_size = min(self._chunk_size, size - chunk_start)
-            yield io.BytesIO(
-                self._data[chunk_start:chunk_start + current_chunk_size])
+        for i in range(len(self)):
+            self._underlying.read(self._remaining)
+            self._remaining = min(self._chunk_size,
+                                  self._length - i * self._chunk_size)
+            yield _SplitChunk(self)
+
+    def close(self):
+        self._underlying.close()
+
+
+class _SplitChunk(object):
+    def __init__(self, owner):
+        self._owner = owner
+
+    def read(self, n=-1):
+        if n == -1 or n is None:
+            n = self._owner._remaining
+        try:
+            return self._owner._underlying.read(n)
+        finally:
+            self._owner._remaining -= n
 
 
 class CombineStreams(object):

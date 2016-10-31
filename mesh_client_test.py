@@ -2,6 +2,7 @@ from unittest import TestCase, main
 import os
 from mesh_client import MeshClient, MeshError, default_client_context
 from mesh_client.mock_server import MockMeshApplication
+from six.moves.urllib.error import HTTPError
 
 
 alice_mailbox = 'alice'
@@ -16,14 +17,18 @@ class TestError(StandardError):
 
 class MeshClientTest(TestCase):
     def run(self, result=None):
-        with MockMeshApplication() as mock_app:
-            self.mock_app = mock_app
-            self.uri = mock_app.uri
-            self.alice = MeshClient(self.uri, alice_mailbox, alice_password,
-                                    ssl_context=default_client_context)
-            self.bob = MeshClient(self.uri, bob_mailbox, bob_password,
-                                  ssl_context=default_client_context)
-            super(MeshClientTest, self).run(result)
+        try:
+            with MockMeshApplication() as mock_app:
+                self.mock_app = mock_app
+                self.uri = mock_app.uri
+                self.alice = MeshClient(self.uri, alice_mailbox, alice_password,
+                                        ssl_context=default_client_context)
+                self.bob = MeshClient(self.uri, bob_mailbox, bob_password,
+                                      ssl_context=default_client_context)
+                super(MeshClientTest, self).run(result)
+        except HTTPError as e:
+            print e.read()
+            raise
 
     def test_send_receive(self):
         alice = self.alice

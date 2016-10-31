@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from __future__ import print_function
 import hmac
 import json
 import uuid
@@ -15,6 +16,7 @@ from wsgiref.simple_server import make_server, WSGIServer
 
 _OPTIONAL_HEADERS = {
     "CONTENT_TYPE": "Content-Type",
+    "HTTP_CONTENT_ENCODING": "Content-Encoding",
     "HTTP_MEX_WORKFLOWID": "Mex-WorkflowID",
     "HTTP_MEX_FILENAME": "Mex-FileName",
     "HTTP_MEX_LOCALID": "Mex-LocalID",
@@ -22,7 +24,9 @@ _OPTIONAL_HEADERS = {
     "HTTP_MEX_PROCESSID": "Mex-ProcessID",
     "HTTP_MEX_SUBJECT": "Mex-Subject",
     "HTTP_MEX_ENCRYPTED": "Mex-Encrypted",
-    "HTTP_MEX_COMPRESSED": "Mex-Compressed"
+    "HTTP_MEX_COMPRESS": "Mex-Compress",
+    "HTTP_MEX_COMPRESSED": "Mex-Compressed",
+    "HTTP_MEX_CHUNK_RANGE": "Mex-Chunk-Range",
 }
 
 
@@ -101,6 +105,17 @@ class MockMeshApplication:
         request_method = environ["REQUEST_METHOD"]
         message_id = shift_path_info(environ)
         mailbox = environ["mesh.mailbox"]
+
+        if (request_method == "PUT" and
+                environ["PATH_INFO"] == "/status/acknowledged"):
+            del self.messages[mailbox][message_id]
+            return _simple_ok(environ, start_response)
+
+        chunk_msg = shift_path_info(environ)
+        print("Chunk message", chunk_msg)
+        if chunk_msg:
+            return self.download_chunk(chunk_msg)(environ, start_response)
+
         if request_method == "GET":
             if message_id:
                 message = self.messages[mailbox][message_id]
@@ -111,14 +126,13 @@ class MockMeshApplication:
                 return _ok("application/json",
                            [json.dumps(messages).encode("UTF-8")],
                            start_response)
-        elif (request_method == "PUT" and
-              environ["PATH_INFO"] == "/status/acknowledged"):
-            del self.messages[mailbox][message_id]
-            return _simple_ok(environ, start_response)
         else:
             return _bad_request(environ, start_response)
 
     def outbox(self, environ, start_response):
+        chunk_msg = shift_path_info(environ)
+        if chunk_msg:
+            return self.upload_chunk(chunk_msg)(environ, start_response)
         try:
             recipient = environ["HTTP_MEX_TO"]
             sender = environ["HTTP_MEX_FROM"]
@@ -152,9 +166,39 @@ class MockMeshApplication:
                    if key in _OPTIONAL_HEADERS}
         msg_id = str(uuid.uuid4())
         mailbox[msg_id] = {"headers": headers, "data": data}
+        self.messages[msg_id] = mailbox[msg_id]
         return _ok("application/json",
                    [json.dumps({"messageID": msg_id}).encode("UTF-8")],
                    start_response)
+
+    def upload_chunk(self, chunk_msg):
+        def handle(environ, start_response):
+            chunk_num = shift_path_info(environ)
+            msg = self.messages[chunk_msg]
+            chunks = msg.setdefault("chunks", {})
+            content_length = environ.get("CONTENT_LENGTH")
+            input_ = environ["wsgi.input"]
+            data = (input_.read(int(content_length))
+                    if content_length else input_.read())
+            chunks[chunk_num] = data
+            start_response('202 Accepted', [])
+            return []
+        return handle
+
+    def download_chunk(self, chunk_msg):
+        def handle(environ, start_response):
+            chunk_num = shift_path_info(environ)
+            msg = self.messages[chunk_msg]
+            chunks = msg["chunks"]
+            chunk = chunks[chunk_num]
+            chunk_header = "{}:{}".format(chunk_num, len(chunks) + 1)
+            start_response('200 OK', [
+                ('Content-Type', 'application/octet-stream'),
+                ('Mex-Chunk-Range', chunk_header)
+            ])
+            return [chunk]
+
+        return handle
 
     def __enter__(self):
         port = random.randint(32768, 65535)

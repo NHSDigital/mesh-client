@@ -4,7 +4,15 @@ import io
 import gzip
 import six
 import tempfile
-from .io_helpers import GzipInputStream, SplitFile, SplitBytes, CombineStreams
+from .io_helpers import GzipInputStream, CombineStreams, SplitStream
+from six.moves.urllib.parse import urljoin
+from six.moves.urllib.request import pathname2url, urlopen
+from contextlib import closing
+
+
+def path2url(path):
+    return urljoin('file:', pathname2url(path))
+
 
 try:
     from itertools import izip
@@ -48,7 +56,8 @@ class IOHelpersTest(TestCase):
             f.write(b"a" * mebibyte)
             f.write(b"b" * mebibyte)
             f.flush()
-            instance = SplitFile(f, mebibyte)
+            f.seek(0)
+            instance = SplitStream(f, mebibyte)
             self.assertEqual(len(instance), 2)
             for m, c in izip(instance, [b"a", b"b"]):
                 self.assertEqual(m.read(mebibyte), c * mebibyte)
@@ -58,7 +67,8 @@ class IOHelpersTest(TestCase):
             f.write(b"a" * mebibyte)
             f.write(b"b")
             f.flush()
-            instance = SplitFile(f, mebibyte)
+            f.seek(0)
+            instance = SplitStream(f, mebibyte)
             self.assertEqual(len(instance), 2)
             iterator = iter(instance)
             chunk1 = six.next(iterator)
@@ -71,7 +81,8 @@ class IOHelpersTest(TestCase):
             f.write(b"a" * mebibyte)
             f.write(b"b" * (mebibyte - 1))
             f.flush()
-            instance = SplitFile(f, mebibyte)
+            f.seek(0)
+            instance = SplitStream(f, mebibyte)
             self.assertEqual(len(instance), 2)
             iterator = iter(instance)
             chunk1 = six.next(iterator)
@@ -79,15 +90,54 @@ class IOHelpersTest(TestCase):
             chunk2 = six.next(iterator)
             self.assertEqual(b"b" * (mebibyte - 1), chunk2.read(mebibyte))
 
+    def test_split_url(self):
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(b"a" * mebibyte)
+            f.write(b"b" * mebibyte)
+            f.flush()
+            with closing(urlopen(path2url(f.name))) as stream:
+                instance = SplitStream(stream, mebibyte)
+                self.assertEqual(len(instance), 2)
+                for m, c in izip(instance, [b"a", b"b"]):
+                    self.assertEqual(m.read(mebibyte), c * mebibyte)
+
+    def test_split_url_irregular_size(self):
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(b"a" * mebibyte)
+            f.write(b"b")
+            f.flush()
+            with closing(urlopen(path2url(f.name))) as stream:
+                instance = SplitStream(stream, mebibyte)
+                self.assertEqual(len(instance), 2)
+                iterator = iter(instance)
+                chunk1 = six.next(iterator)
+                self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
+                chunk2 = six.next(iterator)
+                self.assertEqual(b"b", chunk2.read(mebibyte))
+
+    def test_split_url_irregular_size_2(self):
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(b"a" * mebibyte)
+            f.write(b"b" * (mebibyte - 1))
+            f.flush()
+            with closing(urlopen(path2url(f.name))) as stream:
+                instance = SplitStream(stream, mebibyte)
+                self.assertEqual(len(instance), 2)
+                iterator = iter(instance)
+                chunk1 = six.next(iterator)
+                self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
+                chunk2 = six.next(iterator)
+                self.assertEqual(b"b" * (mebibyte - 1), chunk2.read(mebibyte))
+
     def test_split_bytes(self):
-        instance = SplitBytes(b"a" * small_chunk + b"b" * small_chunk,
-                              small_chunk)
+        instance = SplitStream(b"a" * small_chunk + b"b" * small_chunk,
+                               small_chunk)
         self.assertEqual(len(instance), 2)
         for m, c in izip(instance, [b"a", b"b"]):
             self.assertEqual(c * small_chunk, m.read(small_chunk))
 
     def test_split_bytes_irregular_size(self):
-        instance = SplitBytes(b"a" * small_chunk + b"b", small_chunk)
+        instance = SplitStream(b"a" * small_chunk + b"b", small_chunk)
         self.assertEqual(len(instance), 2)
         iterator = iter(instance)
         chunk1 = six.next(iterator)
@@ -96,8 +146,8 @@ class IOHelpersTest(TestCase):
         self.assertEqual(b"b", chunk2.read(small_chunk))
 
     def test_split_bytes_irregular_size_2(self):
-        instance = SplitBytes(b"a" * small_chunk + b"b" * (small_chunk - 1),
-                              small_chunk)
+        instance = SplitStream(b"a" * small_chunk + b"b" * (small_chunk - 1),
+                               small_chunk)
         self.assertEqual(len(instance), 2)
         iterator = iter(instance)
         chunk1 = six.next(iterator)

@@ -15,7 +15,6 @@ from wsgiref.simple_server import make_server, WSGIServer
 
 
 _OPTIONAL_HEADERS = {
-    "CONTENT_TYPE": "Content-Type",
     "HTTP_CONTENT_ENCODING": "Content-Encoding",
     "HTTP_MEX_WORKFLOWID": "Mex-WorkflowID",
     "HTTP_MEX_FILENAME": "Mex-FileName",

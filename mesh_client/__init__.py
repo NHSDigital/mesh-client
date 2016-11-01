@@ -25,7 +25,6 @@ default_client_context.load_cert_chain(
 
 
 _OPTIONAL_HEADERS = {
-    "content_type": "Content-Type",
     "workflow_id": "Mex-WorkflowID",
     "filename": "Mex-FileName",
     "local_id": "Mex-LocalID",
@@ -129,7 +128,6 @@ class MeshClient(object):
                 "Content-Length": len(chunk)
 
             }
-            print(headers)
             req = Request(
                 "{}/messageexchange/{}/outbox/{}/{}".format(
                     self._url, self._mailbox, message_id, chunk_num),
@@ -168,8 +166,13 @@ class _Message(object):
         self._msg_id = msg_id
         self._client = client
         headers = response.info()
+        print(headers)
         for key, value in _OPTIONAL_HEADERS.items():
-            setattr(self, key, headers.get(value, None))
+            header_value = headers.get(value, None)
+            if key in ["compressed", "encrypted"]:
+                header_value = header_value or "FALSE"
+                header_value = header_value.upper() == "TRUE"
+            setattr(self, key, header_value)
         chunk, chunk_count = map(int, headers["Mex-Chunk-Range"].split(":"))
         self._response = CombineStreams(chain(
             [response],

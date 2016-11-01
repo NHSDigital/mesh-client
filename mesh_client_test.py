@@ -93,7 +93,6 @@ class MeshClientTest(TestCase):
         message_id = alice.send_message(
             bob_mailbox, b"Hello Bob 5",
             subject="Hello World",
-            content_type="text/plain; charset=ascii",
             filename="upload.txt",
             local_id="12345",
             message_type="DATA",
@@ -105,14 +104,23 @@ class MeshClientTest(TestCase):
 
         with bob.retrieve_message(message_id) as msg:
             self.assertEqual(msg.subject, "Hello World")
-            self.assertEqual(msg.content_type, "text/plain; charset=ascii")
             self.assertEqual(msg.filename, "upload.txt")
             self.assertEqual(msg.local_id, "12345")
             self.assertEqual(msg.message_type, "DATA")
             self.assertEqual(msg.process_id, "321")
             self.assertEqual(msg.workflow_id, "111")
-            self.assertEqual(msg.encrypted, "False")
-            self.assertEqual(msg.compressed, "False")
+            self.assertFalse(msg.encrypted)
+            self.assertFalse(msg.compressed)
+
+        message_id = alice.send_message(
+            bob_mailbox, b"Hello Bob 5",
+            encrypted=True,
+            compressed=True
+        )
+
+        with bob.retrieve_message(message_id) as msg:
+            self.assertTrue(msg.encrypted)
+            self.assertTrue(msg.compressed)
 
     def test_error_handling(self):
         alice = self.alice

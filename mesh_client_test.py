@@ -1,9 +1,9 @@
 from __future__ import absolute_import, print_function
-from unittest import TestCase, main
+from unittest import TestCase, main, skip
 import signal
 import traceback
 import sys
-from mesh_client import MeshClient, MeshError, default_client_context
+from mesh_client import MeshClient, MeshError, default_ssl_opts
 from mesh_client.mock_server import MockMeshApplication
 from six.moves.urllib.error import HTTPError
 
@@ -33,9 +33,9 @@ class MeshClientTest(TestCase):
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
                 self.alice = MeshClient(self.uri, alice_mailbox, alice_password,
-                                        ssl_context=default_client_context, max_chunk_size=5)
+                                        max_chunk_size=5, **default_ssl_opts)
                 self.bob = MeshClient(self.uri, bob_mailbox, bob_password,
-                                      ssl_context=default_client_context, max_chunk_size=5)
+                                      max_chunk_size=5, **default_ssl_opts)
                 super(MeshClientTest, self).run(result)
         except HTTPError as e:
             print(e.read())
@@ -55,6 +55,20 @@ class MeshClientTest(TestCase):
         self.assertEqual([message_id], bob.list_messages())
         msg = bob.retrieve_message(message_id)
         self.assertEqual(msg.read(), b"Hello Bob 1")
+        msg.acknowledge()
+        self.assertEqual([], bob.list_messages())
+
+    def test_transparent_compression(self):
+        alice = self.alice
+        bob = self.bob
+
+        print("Sending")
+        message_id = alice.send_message(
+            bob_mailbox, b"Hello Bob Compressed", transparent_compress=True)
+        self.assertEqual([message_id], bob.list_messages())
+        print("Receiving")
+        msg = bob.retrieve_message(message_id)
+        self.assertEqual(msg.read(), b"Hello Bob Compressed")
         msg.acknowledge()
         self.assertEqual([], bob.list_messages())
 

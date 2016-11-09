@@ -4,25 +4,46 @@ import uuid
 import hmac
 import datetime
 import os.path
+import requests
 import ssl
 import six
-from six.moves.urllib.request import Request, urlopen
-from six.moves.urllib.error import HTTPError
-from contextlib import closing
 from itertools import chain
 import json
 from hashlib import sha256
-from .io_helpers import CombineStreams, SplitStream
+from .io_helpers import CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
+
+
+
+
+# import requests
+# from requests.adapters import HTTPAdapter
+# from requests.packages.urllib3.poolmanager import PoolManager
+#
+#
+# # Never check any hostnames
+# class HostNameIgnoringAdapter(HTTPAdapter):
+#     def init_poolmanager(self, connections, maxsize, block=False):
+#         self.poolmanager = PoolManager(num_pools=connections,
+#                                        maxsize=maxsize,
+#                                        block=block,
+#                                        assert_hostname=False)
+#
+#
+# s = requests.Session()
+# s.mount('https://10.97.89.163', HostNameIgnoringAdapter())
+# requests = s
+#
+
+
 
 
 _data_dir = os.path.dirname(__file__)
-default_client_context = ssl.create_default_context(
-    ssl.Purpose.CLIENT_AUTH,
-    cafile=os.path.join(_data_dir, "ca.cert.pem"))
-default_client_context.load_cert_chain(
-    os.path.join(_data_dir, 'client.cert.pem'),
-    os.path.join(_data_dir, 'client.key.pem'))
 
+default_ssl_opts = {
+    "verify": os.path.join(_data_dir, "ca.cert.pem"),
+    "cert": (os.path.join(_data_dir, 'client.cert.pem'),
+             os.path.join(_data_dir, 'client.key.pem'))
+}
 
 _OPTIONAL_HEADERS = {
     "workflow_id": "Mex-WorkflowID",
@@ -49,39 +70,51 @@ class MeshClient(object):
                  password,
                  shared_key=b"BackBone",
                  ssl_context=None,
+                 cert=None,
+                 verify=None,
                  max_chunk_size=75 * 1024 * 1024):
         self._url = url
         self._mailbox = mailbox
-        self._ssl_context = ssl_context
+        self._cert = cert
+        self._verify = verify
         self._token_generator = _AuthTokenGenerator(shared_key, mailbox,
                                                     password)
         self._max_chunk_size = max_chunk_size
 
     def list_messages(self):
-        req = Request(
+        response = requests.get(
             "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
-            headers={"Authorization": self._token_generator()})
-        with closing(urlopen(req, context=self._ssl_context)) as resp:
-            return json.load(_utf8_reader(resp))["messages"]
+            headers={"Authorization": self._token_generator()},
+            cert=self._cert, verify=self._verify)
+        return response.json()["messages"]
 
     def retrieve_message(self, message_id):
         message_id = getattr(message_id, "_msg_id", message_id)
-        req = Request(
+        response = requests.get(
             "{}/messageexchange/{}/inbox/{}".format(self._url, self._mailbox,
                                                     message_id),
-            headers={"Authorization": self._token_generator()})
-        return _Message(
-            message_id, urlopen(req, context=self._ssl_context), self)
+            headers={"Authorization": self._token_generator()},
+            stream=True,
+            cert=self._cert, verify=self._verify
+        )
+        return _Message(message_id, response, self)
 
     def retrieve_message_chunk(self, message_id, chunk_num):
-        req = Request(
+        response = requests.get(
             "{}/messageexchange/{}/inbox/{}/{}".format(
                 self._url, self._mailbox, message_id, chunk_num),
-            headers={"Authorization": self._token_generator()}
+            headers={"Authorization": self._token_generator()},
+            stream=True,
+            cert=self._cert, verify=self._verify
         )
-        return urlopen(req, context=self._ssl_context)
+        return response.raw
 
-    def send_message(self, recipient, data, **kwargs):
+    def send_message(self, recipient, data, transparent_compress=False,
+                     **kwargs):
+        maybe_compressed = (
+            lambda stream:
+            GzipCompressStream(stream) if transparent_compress else stream
+        )
         headers = {
             "Authorization": self._token_generator(),
             "Mex-From": self._mailbox,
@@ -99,24 +132,23 @@ class MeshClient(object):
                                         list(_OPTIONAL_HEADERS.keys()))
                                 ))
 
+        if transparent_compress:
+            headers["Mex-Content-Compress"] = "TRUE"
+            headers["Content-Encoding"] = "gzip"
+
         chunks = SplitStream(data, self._max_chunk_size)
         headers["Mex-Chunk-Range"] = "1:{}".format(len(chunks))
         chunk_iterator = iter(chunks)
 
-        chunk1 = six.next(chunk_iterator)
-        req = Request(
+        chunk1 = maybe_compressed(six.next(chunk_iterator))
+        response1 = requests.post(
             "{}/messageexchange/{}/outbox".format(self._url, self._mailbox),
-            chunk1, headers=headers)
-        try:
-            resp = urlopen(req, context=self._ssl_context)
-        except HTTPError as e:
-            resp = e
-
-        with closing(resp):
-            json_resp = json.load(_utf8_reader(resp))
-            if resp.code == 417 or "errorDescription" in json_resp:
-                raise MeshError(json_resp["errorDescription"], json_resp)
-            message_id = json_resp["messageID"]
+            data=chunk1, headers=headers, cert=self._cert, verify=self._verify
+        )
+        json_resp = response1.json()
+        if response1.status_code == 417 or "errorDescription" in json_resp:
+            raise MeshError(json_resp["errorDescription"], json_resp)
+        message_id = json_resp["messageID"]
 
         for i, chunk in enumerate(chunk_iterator):
             chunk_num = i + 2
@@ -124,37 +156,28 @@ class MeshClient(object):
                 "Content-Type": "application/octet-stream",
                 "Mex-Chunk-Range": "{}:{}".format(chunk_num, len(chunks)),
                 "Mex-From": self._mailbox,
-                "Authorization": self._token_generator(),
-                "Content-Length": len(chunk)
+                "Authorization": self._token_generator()
 
             }
-            req = Request(
+            response = requests.post(
                 "{}/messageexchange/{}/outbox/{}/{}".format(
                     self._url, self._mailbox, message_id, chunk_num),
-                chunk, headers=headers)
-
-            try:
-                resp = urlopen(req, context=self._ssl_context)
-            except HTTPError as e:
-                resp = e
-                raise
-            finally:
-                if resp:
-                    resp.close()
+                data=maybe_compressed(chunk), headers=headers,
+                cert=self._cert, verify=self._verify
+            )
+            response.raise_for_status()
 
         return message_id
 
     def acknowledge_message(self, message_id):
         message_id = getattr(message_id, "_msg_id", message_id)
-        req = Request(
+        response = requests.put(
             "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(
                 self._url, self._mailbox, message_id),
             headers={
                 "Authorization": self._token_generator(),
-            })
-        req.get_method = lambda: "PUT"
-        with closing(urlopen(req, context=self._ssl_context)) as resp:
-            return resp.read()
+            }, cert=self._cert, verify=self._verify)
+        response.raise_for_status()
 
     def iterate_all_messages(self):
         for msg_id in self.list_messages():
@@ -165,8 +188,7 @@ class _Message(object):
     def __init__(self, msg_id, response, client):
         self._msg_id = msg_id
         self._client = client
-        headers = response.info()
-        print(headers)
+        headers = response.headers
         for key, value in _OPTIONAL_HEADERS.items():
             header_value = headers.get(value, None)
             if key in ["compressed", "encrypted"]:
@@ -174,9 +196,14 @@ class _Message(object):
                 header_value = header_value.upper() == "TRUE"
             setattr(self, key, header_value)
         chunk, chunk_count = map(int, headers["Mex-Chunk-Range"].split(":"))
+        maybe_decompress = (lambda stream:
+                            GzipDecompressStream(stream)
+                            if headers.get("Content-Encoding") == "gzip"
+                            else stream)
         self._response = CombineStreams(chain(
-            [response],
-            (client.retrieve_message_chunk(msg_id, str(i + 2))
+            [maybe_decompress(response.raw)],
+            (maybe_decompress(
+                client.retrieve_message_chunk(msg_id, str(i + 2)))
              for i in range(chunk_count - 1))
         ))
 

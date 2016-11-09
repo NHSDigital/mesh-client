@@ -5,7 +5,46 @@ import zlib
 import six
 
 
-class AbstractGzipStream(object):
+class IteratorMixin(object):
+    __block_size = 65536
+
+    def __iter__(self):
+        while True:
+            block = self.read(self.__block_size)
+            if len(block) > 0:
+                yield block
+            else:
+                break
+
+
+class CloseUnderlyingMixin(object):
+    def close(self):
+        try:
+            if hasattr(self._underlying, "close"):
+                self._underlying.close()
+        finally:
+            self._underlying = None
+            if hasattr(super(CloseUnderlyingMixin, self), "close"):
+                super(CloseUnderlyingMixin, self).close()
+
+    def __del__(self):
+        self.close()
+        if hasattr(super(CloseUnderlyingMixin, self), "__del__"):
+            super(CloseUnderlyingMixin, self).__del__()
+
+    def __enter__(self):
+        if hasattr(super(CloseUnderlyingMixin, self), "__enter__"):
+            return super(CloseUnderlyingMixin, self).__enter__()
+        else:
+            return self
+
+    def __exit__(self, typ, value, traceback):
+        self.close()
+        if hasattr(super(CloseUnderlyingMixin, self), "__exit__"):
+            return super(CloseUnderlyingMixin, self).__exit__(typ, value, traceback)
+
+
+class AbstractGzipStream(IteratorMixin, CloseUnderlyingMixin):
     """
     Wrap an existing readable, in a readable that produces a gzipped
     version of the underlying stream.
@@ -47,25 +86,10 @@ class AbstractGzipStream(object):
                 else:
                     self._buffer.write(self._finish())
                     self._buffer.seek(0)
-                    self._underlying.close()
-                    self._underlying = None
+                    self.close()
 
     def read_all(self):
         self.read()
-
-    def close(self):
-        if self._underlying is not None:
-            self._underlying.close()
-            self._underlying = None
-
-    def __del__(self):
-        self.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, typ, value, traceback):
-        self.close()
 
 
 class GzipCompressStream(AbstractGzipStream):
@@ -106,7 +130,7 @@ class GzipDecompressStream(AbstractGzipStream):
         return self._decompress_obj.flush()
 
 
-class SplitStream(object):
+class SplitStream(CloseUnderlyingMixin):
     def __init__(self, data, chunk_size=75 * 1024 * 1024):
         if isinstance(data, bytes):
             self._underlying = io.BytesIO(data)
@@ -133,11 +157,8 @@ class SplitStream(object):
                                   self._length - i * self._chunk_size)
             yield _SplitChunk(self)
 
-    def close(self):
-        self._underlying.close()
 
-
-class _SplitChunk(object):
+class _SplitChunk(IteratorMixin):
     def __init__(self, owner):
         self._owner = owner
 
@@ -155,7 +176,7 @@ class _SplitChunk(object):
         return self._owner._remaining
 
 
-class CombineStreams(object):
+class CombineStreams(IteratorMixin):
     def __init__(self, streams):
         self._streams = iter(streams)
         self._current_stream = six.next(self._streams)
@@ -184,3 +205,67 @@ class CombineStreams(object):
             self._current_stream.close()
         except:
             pass
+
+
+class FiniteLengthStream(IteratorMixin, CloseUnderlyingMixin):
+    def __init__(self, stream, length):
+        self._underlying = stream
+        self._remaining = length
+
+    def read(self, n=-1):
+        if n == -1 or n is None:
+            n = self._remaining
+        n = min(n, self._remaining)
+        try:
+            return self._underlying.read(n)
+        finally:
+            self._remaining -= n
+
+
+class ChunkedStream(IteratorMixin, CloseUnderlyingMixin):
+    def __init__(self, underlying):
+        self._underlying = underlying
+        self._buffer = io.BytesIO()
+
+    def read(self, n=-1):
+        if n == -1:
+            n = None
+        while True:
+            # If underlying stream finished, just read from buffer
+            if self._underlying is None:
+                return self._buffer.read(n)
+
+            # If underlying stream not finished, buffer is positioned at end,
+            # ready for writing
+            limit = self._buffer.tell()
+            if n is not None and limit >= n:
+                self._buffer.seek(0)
+                try:
+                    return self._buffer.read(n)
+                finally:
+                    remainder = self._buffer.read(limit - n)
+                    self._buffer = io.BytesIO(remainder)
+                    self._buffer.seek(0, 2)
+            else:
+                block_header = self._underlying.read(1)
+                while not block_header.endswith(b"\r\n"):
+                    block_header += self._underlying.read(1)
+                block_length = int(block_header, 16)
+                if block_length > 0:
+                    self._buffer.write(self._underlying.read(block_length))
+                    assert self._underlying.read(2) == b"\r\n"
+                else:
+                    self._buffer.seek(0)
+                    self._underlying.close()
+                    self._underlying = None
+
+
+def stream_from_wsgi_environ(environ):
+    if environ.get("CONTENT_LENGTH"):
+        return FiniteLengthStream(
+            environ["wsgi.input"], int(environ["CONTENT_LENGTH"]))
+    elif environ.get("HTTP_TRANSFER_ENCODING") == "chunked":
+        return ChunkedStream(environ["wsgi.input"])
+    else:
+        # terminated by close
+        return environ["wsgi.input"]

@@ -7,11 +7,13 @@ import ssl
 import random
 import traceback
 import os.path
+from contextlib import closing
 from hashlib import sha256
 from collections import OrderedDict
 from threading import Thread
 from wsgiref.util import shift_path_info
 from wsgiref.simple_server import make_server, WSGIServer
+from .io_helpers import stream_from_wsgi_environ
 
 
 _OPTIONAL_HEADERS = {
@@ -117,7 +119,9 @@ class MockMeshApplication:
                     return self.download_chunk(
                         message_id, chunk_num)(environ, start_response)
                 message = self.messages[mailbox][message_id]
-                start_response("200 OK", list(message["headers"].items()))
+                response_code = ("206 Partial Content" if "chunks" in message
+                                 else "200 OK")
+                start_response(response_code, list(message["headers"].items()))
                 return [message["data"]]
             else:
                 messages = {"messages": list(self.messages[mailbox].keys())}
@@ -147,10 +151,8 @@ class MockMeshApplication:
                 "messageID": "99999"})]
 
         mailbox = self.messages.setdefault(recipient, OrderedDict())
-        content_length = environ.get("CONTENT_LENGTH")
-        input_ = environ["wsgi.input"]
-        data = (input_.read(int(content_length))
-                if content_length else input_.read())
+        with closing(stream_from_wsgi_environ(environ)) as stream:
+            data = stream.read()
         if not data:
             start_response("417 Expectation Failed",
                            [('Content-Type', 'application/json')])
@@ -174,10 +176,8 @@ class MockMeshApplication:
             chunk_num = shift_path_info(environ)
             msg = self.messages[chunk_msg]
             chunks = msg.setdefault("chunks", {})
-            content_length = environ.get("CONTENT_LENGTH")
-            input_ = environ["wsgi.input"]
-            data = (input_.read(int(content_length))
-                    if content_length else input_.read())
+            with closing(stream_from_wsgi_environ(environ)) as stream:
+                data = stream.read()
             chunks[chunk_num] = data
             start_response('202 Accepted', [])
             return []
@@ -211,7 +211,7 @@ class MockMeshApplication:
 
 _data_dir = os.path.dirname(__file__)
 default_server_context = ssl.create_default_context(
-    ssl.Purpose.SERVER_AUTH, cafile=os.path.join(_data_dir, "ca.cert.pem"))
+    ssl.Purpose.CLIENT_AUTH, cafile=os.path.join(_data_dir, "ca.cert.pem"))
 default_server_context.load_cert_chain(
     os.path.join(_data_dir, 'server.cert.pem'),
     os.path.join(_data_dir, 'server.key.pem'))

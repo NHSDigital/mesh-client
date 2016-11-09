@@ -7,7 +7,6 @@ from mesh_client import MeshClient, MeshError, default_ssl_opts
 from mesh_client.mock_server import MockMeshApplication
 from six.moves.urllib.error import HTTPError
 
-
 alice_mailbox = 'alice'
 alice_password = 'password'
 bob_mailbox = 'bob'
@@ -18,6 +17,7 @@ def print_stack_frames(signum=None, frame=None):
     for frame in sys._current_frames().values():
         traceback.print_stack(frame)
         print()
+
 
 signal.signal(signal.SIGUSR1, print_stack_frames)
 
@@ -32,10 +32,18 @@ class MeshClientTest(TestCase):
             with MockMeshApplication() as mock_app:
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
-                self.alice = MeshClient(self.uri, alice_mailbox, alice_password,
-                                        max_chunk_size=5, **default_ssl_opts)
-                self.bob = MeshClient(self.uri, bob_mailbox, bob_password,
-                                      max_chunk_size=5, **default_ssl_opts)
+                self.alice = MeshClient(
+                    self.uri,
+                    alice_mailbox,
+                    alice_password,
+                    max_chunk_size=5,
+                    **default_ssl_opts)
+                self.bob = MeshClient(
+                    self.uri,
+                    bob_mailbox,
+                    bob_password,
+                    max_chunk_size=5,
+                    **default_ssl_opts)
                 super(MeshClientTest, self).run(result)
         except HTTPError as e:
             print(e.read())
@@ -105,7 +113,8 @@ class MeshClientTest(TestCase):
         bob = self.bob
 
         message_id = alice.send_message(
-            bob_mailbox, b"Hello Bob 5",
+            bob_mailbox,
+            b"Hello Bob 5",
             subject="Hello World",
             filename="upload.txt",
             local_id="12345",
@@ -113,8 +122,7 @@ class MeshClientTest(TestCase):
             process_id="321",
             workflow_id="111",
             encrypted=False,
-            compressed=False
-        )
+            compressed=False)
 
         with bob.retrieve_message(message_id) as msg:
             self.assertEqual(msg.subject, "Hello World")
@@ -127,10 +135,7 @@ class MeshClientTest(TestCase):
             self.assertFalse(msg.compressed)
 
         message_id = alice.send_message(
-            bob_mailbox, b"Hello Bob 5",
-            encrypted=True,
-            compressed=True
-        )
+            bob_mailbox, b"Hello Bob 5", encrypted=True, compressed=True)
 
         with bob.retrieve_message(message_id) as msg:
             self.assertTrue(msg.encrypted)
@@ -140,6 +145,7 @@ class MeshClientTest(TestCase):
         alice = self.alice
         with self.assertRaises(MeshError):
             alice.send_message(bob_mailbox, b"")
+
 
 if __name__ == "__main__":
     main()

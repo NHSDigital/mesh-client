@@ -41,7 +41,8 @@ class CloseUnderlyingMixin(object):
     def __exit__(self, typ, value, traceback):
         self.close()
         if hasattr(super(CloseUnderlyingMixin, self), "__exit__"):
-            return super(CloseUnderlyingMixin, self).__exit__(typ, value, traceback)
+            return super(CloseUnderlyingMixin, self).__exit__(typ, value,
+                                                              traceback)
 
 
 class AbstractGzipStream(IteratorMixin, CloseUnderlyingMixin):
@@ -49,6 +50,7 @@ class AbstractGzipStream(IteratorMixin, CloseUnderlyingMixin):
     Wrap an existing readable, in a readable that produces a gzipped
     version of the underlying stream.
     """
+
     def __init__(self, underlying, block_size=65536):
         self._underlying = underlying
         self._buffer = io.BytesIO()
@@ -97,6 +99,7 @@ class GzipCompressStream(AbstractGzipStream):
     Wrap an existing readable, in a readable that produces a gzipped
     version of the underlying stream.
     """
+
     def __init__(self, underlying, block_size=65536):
         AbstractGzipStream.__init__(self, underlying, block_size)
         self._compress_obj = zlib.compressobj(
@@ -117,6 +120,7 @@ class GzipDecompressStream(AbstractGzipStream):
     Wrap an existing readable, in a readable that decompresses
     the underlying stream.
     """
+
     def __init__(self, underlying, block_size=65536):
         AbstractGzipStream.__init__(self, underlying, block_size)
         self._decompress_obj = zlib.decompressobj(
@@ -147,8 +151,8 @@ class SplitStream(CloseUnderlyingMixin):
         self._remaining = 0
 
     def __len__(self):
-        return max(
-            1, (self._length + self._chunk_size - 1) // self._chunk_size)
+        return max(1,
+                   (self._length + self._chunk_size - 1) // self._chunk_size)
 
     def __iter__(self):
         for i in range(len(self)):
@@ -262,8 +266,8 @@ class ChunkedStream(IteratorMixin, CloseUnderlyingMixin):
 
 def stream_from_wsgi_environ(environ):
     if environ.get("CONTENT_LENGTH"):
-        return FiniteLengthStream(
-            environ["wsgi.input"], int(environ["CONTENT_LENGTH"]))
+        return FiniteLengthStream(environ["wsgi.input"],
+                                  int(environ["CONTENT_LENGTH"]))
     elif environ.get("HTTP_TRANSFER_ENCODING") == "chunked":
         return ChunkedStream(environ["wsgi.input"])
     else:

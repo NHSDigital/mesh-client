@@ -15,7 +15,6 @@ from wsgiref.util import shift_path_info
 from wsgiref.simple_server import make_server, WSGIServer
 from .io_helpers import stream_from_wsgi_environ
 
-
 _OPTIONAL_HEADERS = {
     "HTTP_CONTENT_ENCODING": "Content-Encoding",
     "HTTP_MEX_WORKFLOWID": "Mex-WorkflowID",
@@ -118,13 +117,13 @@ class MockMeshApplication:
                 if chunk_num:
                     return self.download_chunk(
                         message_id, chunk_num)(environ, start_response)
-                message = self.messages[mailbox][message_id]
-                response_code = ("206 Partial Content" if "chunks" in message
-                                 else "200 OK")
+                message = self.messages.get(mailbox,[])[message_id]
+                response_code = ("206 Partial Content"
+                                 if "chunks" in message else "200 OK")
                 start_response(response_code, list(message["headers"].items()))
                 return [message["data"]]
             else:
-                messages = {"messages": list(self.messages[mailbox].keys())}
+                messages = {"messages": list(self.messages.get(mailbox,[]).keys())}
                 return _ok("application/json",
                            [json.dumps(messages).encode("UTF-8")],
                            start_response)
@@ -148,7 +147,8 @@ class MockMeshApplication:
                 "errorCode": "02",
                 "errorDescription": str(e),
                 "errorEvent": "COLLECT",
-                "messageID": "99999"})]
+                "messageID": "99999"
+            })]
 
         mailbox = self.messages.setdefault(recipient, OrderedDict())
         with closing(stream_from_wsgi_environ(environ)) as stream:
@@ -160,7 +160,8 @@ class MockMeshApplication:
                 "errorCode": "02",
                 "errorDescription": "Data file is missing or inaccessible.",
                 "errorEvent": "COLLECT",
-                "messageID": "99999"}).encode("utf-8")]
+                "messageID": "99999"
+            }).encode("utf-8")]
         headers = {_OPTIONAL_HEADERS[key]: value
                    for key, value in environ.items()
                    if key in _OPTIONAL_HEADERS}
@@ -181,6 +182,7 @@ class MockMeshApplication:
             chunks[chunk_num] = data
             start_response('202 Accepted', [])
             return []
+
         return handle
 
     def download_chunk(self, chunk_msg, chunk_num):
@@ -201,8 +203,9 @@ class MockMeshApplication:
         port = random.randint(32768, 65535)
         self.uri = "https://localhost:{}".format(port)
         self.server = make_server("", port, self, server_class=SSLWSGIServer)
-        Thread(target=self.server.serve_forever,
-               kwargs={"poll_interval": 0.01}).start()
+        Thread(
+            target=self.server.serve_forever,
+            kwargs={"poll_interval": 0.01}).start()
         return self
 
     def __exit__(self, type, value, traceback):

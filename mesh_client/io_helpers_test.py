@@ -209,5 +209,6 @@ class IOHelpersTest(TestCase):
         self.assertEqual(instance.read(), b"")
         self.assertEqual(result, b"Hello" * 20)
 
+
 if __name__ == '__main__':
     main()

@@ -12,31 +12,6 @@ import json
 from hashlib import sha256
 from .io_helpers import CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
 
-
-
-
-# import requests
-# from requests.adapters import HTTPAdapter
-# from requests.packages.urllib3.poolmanager import PoolManager
-#
-#
-# # Never check any hostnames
-# class HostNameIgnoringAdapter(HTTPAdapter):
-#     def init_poolmanager(self, connections, maxsize, block=False):
-#         self.poolmanager = PoolManager(num_pools=connections,
-#                                        maxsize=maxsize,
-#                                        block=block,
-#                                        assert_hostname=False)
-#
-#
-# s = requests.Session()
-# s.mount('https://10.97.89.163', HostNameIgnoringAdapter())
-# requests = s
-#
-
-
-
-
 _data_dir = os.path.dirname(__file__)
 
 default_ssl_opts = {
@@ -85,7 +60,8 @@ class MeshClient(object):
         response = requests.get(
             "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
             headers={"Authorization": self._token_generator()},
-            cert=self._cert, verify=self._verify)
+            cert=self._cert,
+            verify=self._verify)
         return response.json()["messages"]
 
     def retrieve_message(self, message_id):
@@ -95,8 +71,8 @@ class MeshClient(object):
                                                     message_id),
             headers={"Authorization": self._token_generator()},
             stream=True,
-            cert=self._cert, verify=self._verify
-        )
+            cert=self._cert,
+            verify=self._verify)
         return _Message(message_id, response, self)
 
     def retrieve_message_chunk(self, message_id, chunk_num):
@@ -105,15 +81,17 @@ class MeshClient(object):
                 self._url, self._mailbox, message_id, chunk_num),
             headers={"Authorization": self._token_generator()},
             stream=True,
-            cert=self._cert, verify=self._verify
-        )
+            cert=self._cert,
+            verify=self._verify)
         return response.raw
 
-    def send_message(self, recipient, data, transparent_compress=False,
+    def send_message(self,
+                     recipient,
+                     data,
+                     transparent_compress=False,
                      **kwargs):
         maybe_compressed = (
-            lambda stream:
-            GzipCompressStream(stream) if transparent_compress else stream
+            lambda stream: GzipCompressStream(stream) if transparent_compress else stream
         )
         headers = {
             "Authorization": self._token_generator(),
@@ -127,10 +105,9 @@ class MeshClient(object):
                 raise TypeError("Unrecognised keyword argument {key}."
                                 " optional arguments are: {args}".format(
                                     key=key,
-                                    args=", ".join(
-                                        ["recipient", "data"] +
-                                        list(_OPTIONAL_HEADERS.keys()))
-                                ))
+                                    args=", ".join([
+                                        "recipient", "data"
+                                    ] + list(_OPTIONAL_HEADERS.keys()))))
 
         if transparent_compress:
             headers["Mex-Content-Compress"] = "TRUE"
@@ -143,8 +120,10 @@ class MeshClient(object):
         chunk1 = maybe_compressed(six.next(chunk_iterator))
         response1 = requests.post(
             "{}/messageexchange/{}/outbox".format(self._url, self._mailbox),
-            data=chunk1, headers=headers, cert=self._cert, verify=self._verify
-        )
+            data=chunk1,
+            headers=headers,
+            cert=self._cert,
+            verify=self._verify)
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)
@@ -157,14 +136,14 @@ class MeshClient(object):
                 "Mex-Chunk-Range": "{}:{}".format(chunk_num, len(chunks)),
                 "Mex-From": self._mailbox,
                 "Authorization": self._token_generator()
-
             }
             response = requests.post(
                 "{}/messageexchange/{}/outbox/{}/{}".format(
                     self._url, self._mailbox, message_id, chunk_num),
-                data=maybe_compressed(chunk), headers=headers,
-                cert=self._cert, verify=self._verify
-            )
+                data=maybe_compressed(chunk),
+                headers=headers,
+                cert=self._cert,
+                verify=self._verify)
             response.raise_for_status()
 
         return message_id
@@ -176,7 +155,9 @@ class MeshClient(object):
                 self._url, self._mailbox, message_id),
             headers={
                 "Authorization": self._token_generator(),
-            }, cert=self._cert, verify=self._verify)
+            },
+            cert=self._cert,
+            verify=self._verify)
         response.raise_for_status()
 
     def iterate_all_messages(self):
@@ -196,16 +177,13 @@ class _Message(object):
                 header_value = header_value.upper() == "TRUE"
             setattr(self, key, header_value)
         chunk, chunk_count = map(int, headers["Mex-Chunk-Range"].split(":"))
-        maybe_decompress = (lambda stream:
-                            GzipDecompressStream(stream)
-                            if headers.get("Content-Encoding") == "gzip"
-                            else stream)
-        self._response = CombineStreams(chain(
-            [maybe_decompress(response.raw)],
-            (maybe_decompress(
-                client.retrieve_message_chunk(msg_id, str(i + 2)))
-             for i in range(chunk_count - 1))
-        ))
+        maybe_decompress = (
+            lambda stream: GzipDecompressStream(stream) if headers.get("Content-Encoding") == "gzip" else stream
+        )
+        self._response = CombineStreams(
+            chain([maybe_decompress(response.raw)], (maybe_decompress(
+                client.retrieve_message_chunk(msg_id, str(
+                    i + 2))) for i in range(chunk_count - 1))))
 
     def read(self, *args, **kwargs):
         return self._response.read(*args, **kwargs)

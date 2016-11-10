@@ -5,12 +5,11 @@ import hmac
 import datetime
 import os.path
 import requests
-import ssl
 import six
 from itertools import chain
-import json
 from hashlib import sha256
-from .io_helpers import CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
+from .io_helpers import \
+    CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
 
 _data_dir = os.path.dirname(__file__)
 
@@ -19,6 +18,12 @@ default_ssl_opts = {
     "cert": (os.path.join(_data_dir, 'client.cert.pem'),
              os.path.join(_data_dir, 'client.key.pem'))
 }
+"""
+Usable default values for verify and cert, providing certificates and keys
+which should work with mock_server. Note that these certs will not work with
+any NHS Digital test environments - such certs must be obtained from
+NHS Digital.
+"""
 
 _OPTIONAL_HEADERS = {
     "workflow_id": "Mex-WorkflowID",
@@ -39,15 +44,35 @@ class MeshError(Exception):
 
 
 class MeshClient(object):
+    """
+    A class representing a single MESH session, for a given user on a given
+    endpoint. This class handles details such as chunking and compression
+    transparently.
+    """
+
     def __init__(self,
                  url,
                  mailbox,
                  password,
                  shared_key=b"BackBone",
-                 ssl_context=None,
                  cert=None,
                  verify=None,
-                 max_chunk_size=75 * 1024 * 1024):
+                 max_chunk_size=75 * 1024 * 1024,
+                 transparent_compress=False):
+        """
+        Create a new MeshClient.
+
+        At a minimum, you must provide an endpoint url, a mailbox and a
+        password. Since MESH uses mutual authentication, it is also highly
+        advisable to provide SSL information, in the form of cert and verify
+        these take the same format as in the requests library, so you would
+        typically provide a filename for a CA cert as verify, and a tuple
+        containing two filenames (a client cert and a private key) for cert.
+
+        You can also optionally specify the maximum file size before chunking,
+        and whether messages should be compressed, transparently, before
+        sending.
+        """
         self._url = url
         self._mailbox = mailbox
         self._cert = cert
@@ -55,8 +80,12 @@ class MeshClient(object):
         self._token_generator = _AuthTokenGenerator(shared_key, mailbox,
                                                     password)
         self._max_chunk_size = max_chunk_size
+        self._transparent_compress = transparent_compress
 
     def list_messages(self):
+        """
+        List all messages in user's inbox. Returns a list of message_ids
+        """
         response = requests.get(
             "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
             headers={"Authorization": self._token_generator()},
@@ -65,6 +94,10 @@ class MeshClient(object):
         return response.json()["messages"]
 
     def retrieve_message(self, message_id):
+        """
+        Retrieve a message based on its message_id. This will return a Message
+        object
+        """
         message_id = getattr(message_id, "_msg_id", message_id)
         response = requests.get(
             "{}/messageexchange/{}/inbox/{}".format(self._url, self._mailbox,
@@ -73,9 +106,9 @@ class MeshClient(object):
             stream=True,
             cert=self._cert,
             verify=self._verify)
-        return _Message(message_id, response, self)
+        return Message(message_id, response, self)
 
-    def retrieve_message_chunk(self, message_id, chunk_num):
+    def _retrieve_message_chunk(self, message_id, chunk_num):
         response = requests.get(
             "{}/messageexchange/{}/inbox/{}/{}".format(
                 self._url, self._mailbox, message_id, chunk_num),
@@ -88,10 +121,32 @@ class MeshClient(object):
     def send_message(self,
                      recipient,
                      data,
-                     transparent_compress=False,
                      **kwargs):
+        """
+        Send a message to recipient containing data.
+
+        This method optionally allows the user to provide the following keyword
+        arguments, which specify properties of the message, and map to
+        the equivalent properties in MESH - either headers or control file
+        entries, depending on the type of consumer:
+
+        workflow_id
+        filename
+        local_id
+        message_type
+        process_id
+        subject
+        encrypted
+        compressed
+
+        Note that compressed refers to *non-transparent* compression - the
+        client will not attempt to compress or decompress data. Transparent
+        compression for sending is enabled as a constructor option.
+        """
+        transparent_compress = self._transparent_compress
         maybe_compressed = (
-            lambda stream: GzipCompressStream(stream) if transparent_compress else stream
+            lambda stream: GzipCompressStream(
+                stream) if transparent_compress else stream
         )
         headers = {
             "Authorization": self._token_generator(),
@@ -149,6 +204,9 @@ class MeshClient(object):
         return message_id
 
     def acknowledge_message(self, message_id):
+        """
+        Acknowledge a message_id, deleting it from MESH.
+        """
         message_id = getattr(message_id, "_msg_id", message_id)
         response = requests.put(
             "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(
@@ -161,11 +219,49 @@ class MeshClient(object):
         response.raise_for_status()
 
     def iterate_all_messages(self):
+        """
+        Iterate over a list of Message objects for all messages in the user's
+        inbox. This is provided as a convenience function, but will be
+        slower than list_messages if only the message_ids are needed, since it
+        will also begin to download messages.
+        """
         for msg_id in self.list_messages():
             yield self.retrieve_message(msg_id)
 
 
-class _Message(object):
+class Message(object):
+    """
+    An object representing a message received from MESH. This is a file-like
+    object, and can be passed to anything that expects an object with a `read`
+    method.
+
+    Any properties set on the message (as headers in MESH API, or control file
+    entries) are available as attributes of this object. The following are
+    supported:
+
+    workflow_id
+    filename
+    local_id
+    message_type
+    process_id
+    subject
+    encrypted
+    compressed
+
+    Note that compressed refers to *non-transparent* compression - the
+    client will not attempt to compress or decompress data. Transparent
+    compression is handled automatically, with no intervention needed.
+
+    Messages have a read method, and will handle chunking and transparent
+    compression automatically. Once the data has been read, you must close the
+    underlying stream using the close method. Data can only be read once. If
+    you need to read it again, retrieve the message again.
+
+    Messages can be used as context managers. When used in this way, streams
+    will be closed automatically, and messages will be acknowledged if
+    no exceptions are thrown whilst handling the message.
+    """
+
     def __init__(self, msg_id, response, client):
         self._msg_id = msg_id
         self._client = client
@@ -178,17 +274,34 @@ class _Message(object):
             setattr(self, key, header_value)
         chunk, chunk_count = map(int, headers["Mex-Chunk-Range"].split(":"))
         maybe_decompress = (
-            lambda stream: GzipDecompressStream(stream) if headers.get("Content-Encoding") == "gzip" else stream
+            lambda stream:
+            GzipDecompressStream(stream)
+            if headers.get("Content-Encoding") == "gzip" else stream
         )
         self._response = CombineStreams(
             chain([maybe_decompress(response.raw)], (maybe_decompress(
-                client.retrieve_message_chunk(msg_id, str(
+                client._retrieve_message_chunk(msg_id, str(
                     i + 2))) for i in range(chunk_count - 1))))
 
-    def read(self, *args, **kwargs):
-        return self._response.read(*args, **kwargs)
+    def read(self, n=None):
+        """
+        Read up to n bytes from the message, or read the remainder of the
+        message, if n is not provided.
+        """
+        return self._response.read(n)
+
+    def close(self):
+        """Close the stream underlying this message"""
+        if hasattr(self._response, "close"):
+            try:
+                self._response.close()
+            finally:
+                self._response = None
 
     def acknowledge(self):
+        """
+        Acknowledge this message, and delete it from MESH
+        """
         self._client.acknowledge_message(self._msg_id)
 
     def __enter__(self):
@@ -199,10 +312,11 @@ class _Message(object):
             if not value:
                 self.acknowledge()
         finally:
-            self._response.close()
+            self.close()
 
 
 class _AuthTokenGenerator(object):
+
     def __init__(self, key, mailbox, password):
         self._key = key
         self._mailbox = mailbox

@@ -1,5 +1,5 @@
 from __future__ import absolute_import, print_function
-from unittest import TestCase, main, skip
+from unittest import TestCase, main
 import signal
 import traceback
 import sys
@@ -71,8 +71,9 @@ class MeshClientTest(TestCase):
         bob = self.bob
 
         print("Sending")
+        alice._transparent_compress = True
         message_id = alice.send_message(
-            bob_mailbox, b"Hello Bob Compressed", transparent_compress=True)
+            bob_mailbox, b"Hello Bob Compressed")
         self.assertEqual([message_id], bob.list_messages())
         print("Receiving")
         msg = bob.retrieve_message(message_id)

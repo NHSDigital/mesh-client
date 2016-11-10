@@ -6,9 +6,8 @@ setup(
     name='Mesh Client',
     version='0.1.0',
     description='Client for NHS Digital \'s MESH messaging system',
-    author='Greg Ward',
-    author_email='gward@python.net',
-    url='https://www.python.org/sigs/distutils-sig/',
+    author='James Pickering',
+    author_email='james.pickering@xml-solutions.com',
     packages=['mesh_client'],
     package_data={'mesh_client': ['*.pem']},
     requires=[

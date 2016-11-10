@@ -1,4 +1,19 @@
 #!/usr/bin/python3
+"""
+A crude mock implementation of the MESH API, suitable for use in
+small-scale tests. This file can either be run as a script, which will serve
+on port 8000, or used as a test fixture, which will serve on a random port.
+
+To run mock mesh as a script, run:
+
+python -m mesh_client.mock_server
+
+This mock instance will use TLS mutual authentication, with hard-coded SSL
+certs that are included in the distribution. Matching client certs are
+also included, and the settings to use them are included in the mesh_client
+package as default_ssl_opts. Since these certs and keys are publicly available,
+they should only be used in test environments.
+"""
 from __future__ import print_function
 import hmac
 import json
@@ -63,6 +78,21 @@ def _compose(**kwargs):
 
 
 class MockMeshApplication:
+    """
+    A crude mock instance of MESH, suitable for use in tests.
+
+    This class can be used as a context manager:
+
+    with MockMeshApplication() as app:
+        uri = app.uri
+        # Send and receive stuff from MESH endpoint at uri
+        assert app.messages == expectedMessages
+
+    This will spin up a MESH instance on a random port, and make its uri
+    available as app.uri. The instance will be shut down when the context
+    manager exits.
+    """
+
     def __init__(self, shared_key=b"BackBone"):
         self.messages = {}
         self._shared_key = shared_key
@@ -117,13 +147,14 @@ class MockMeshApplication:
                 if chunk_num:
                     return self.download_chunk(
                         message_id, chunk_num)(environ, start_response)
-                message = self.messages.get(mailbox,[])[message_id]
+                message = self.messages.get(mailbox, [])[message_id]
                 response_code = ("206 Partial Content"
                                  if "chunks" in message else "200 OK")
                 start_response(response_code, list(message["headers"].items()))
                 return [message["data"]]
             else:
-                messages = {"messages": list(self.messages.get(mailbox,[]).keys())}
+                messages = {"messages": list(
+                    self.messages.get(mailbox, []).keys())}
                 return _ok("application/json",
                            [json.dumps(messages).encode("UTF-8")],
                            start_response)
@@ -203,9 +234,11 @@ class MockMeshApplication:
         port = random.randint(32768, 65535)
         self.uri = "https://localhost:{}".format(port)
         self.server = make_server("", port, self, server_class=SSLWSGIServer)
-        Thread(
+        thread = Thread(
             target=self.server.serve_forever,
-            kwargs={"poll_interval": 0.01}).start()
+            kwargs={"poll_interval": 0.01})
+        thread.daemon = True
+        thread.start()
         return self
 
     def __exit__(self, type, value, traceback):

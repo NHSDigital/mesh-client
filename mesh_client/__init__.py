@@ -36,6 +36,12 @@ _OPTIONAL_HEADERS = {
     "compressed": "Mex-Compressed"
 }
 
+_RECEIVE_HEADERS = {
+    "sender": "Mex-From",
+    "recipient": "Mex-To"
+}
+_RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
+
 _utf8_reader = codecs.getreader("utf-8")
 
 
@@ -266,7 +272,7 @@ class Message(object):
         self._msg_id = msg_id
         self._client = client
         headers = response.headers
-        for key, value in _OPTIONAL_HEADERS.items():
+        for key, value in _RECEIVE_HEADERS.items():
             header_value = headers.get(value, None)
             if key in ["compressed", "encrypted"]:
                 header_value = header_value or "FALSE"

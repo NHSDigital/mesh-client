@@ -63,6 +63,8 @@ class MeshClientTest(TestCase):
         self.assertEqual([message_id], bob.list_messages())
         msg = bob.retrieve_message(message_id)
         self.assertEqual(msg.read(), b"Hello Bob 1")
+        self.assertEqual(msg.sender, "alice")
+        self.assertEqual(msg.recipient, "bob")
         msg.acknowledge()
         self.assertEqual([], bob.list_messages())
 

@@ -4,7 +4,8 @@ import io
 import gzip
 import six
 import tempfile
-from .io_helpers import GzipCompressStream, GzipDecompressStream, CombineStreams, SplitStream
+from .io_helpers import GzipCompressStream, GzipDecompressStream, \
+    CombineStreams, SplitStream
 from six.moves.urllib.parse import urljoin
 from six.moves.urllib.request import pathname2url, urlopen
 from contextlib import closing

@@ -42,6 +42,8 @@ _OPTIONAL_HEADERS = {
     "HTTP_MEX_COMPRESS": "Mex-Compress",
     "HTTP_MEX_COMPRESSED": "Mex-Compressed",
     "HTTP_MEX_CHUNK_RANGE": "Mex-Chunk-Range",
+    "HTTP_MEX_FROM": "Mex-From",
+    "HTTP_MEX_TO": "Mex-To",
 }
 
 
@@ -154,7 +156,7 @@ class MockMeshApplication:
                 return [message["data"]]
             else:
                 messages = {"messages": list(
-                    self.messages.get(mailbox, []).keys())}
+                    self.messages.get(mailbox, {}).keys())}
                 return _ok("application/json",
                            [json.dumps(messages).encode("UTF-8")],
                            start_response)

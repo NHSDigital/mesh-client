@@ -278,7 +278,8 @@ class Message(object):
                 header_value = header_value or "FALSE"
                 header_value = header_value.upper() == "TRUE"
             setattr(self, key, header_value)
-        chunk, chunk_count = map(int, headers["Mex-Chunk-Range"].split(":"))
+        chunk, chunk_count = map(
+            int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
         maybe_decompress = (
             lambda stream:
             GzipDecompressStream(stream)

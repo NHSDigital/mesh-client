@@ -6,15 +6,41 @@ import six
 
 
 class IteratorMixin(object):
+    """
+    Produce a series of lines, from a readable that only exposes a `read` method
+    """
     __block_size = 65536
+    __line_iterator = None
 
     def __iter__(self):
+        # We use a BytesIO as our buffer, so we can piggyback on its readlines method
+        buff = io.BytesIO()
         while True:
             block = self.read(self.__block_size)
-            if len(block) > 0:
-                yield block
+            buff.write(block)
+            last_block = len(block) == 0
+            buff.seek(0)
+            lines = buff.readlines()
+            for line in lines[:-1]:
+                yield line
+            if not last_block:
+                buff.seek(0)
+                buff.write(lines[-1])
+                buff.truncate()
             else:
+                yield lines[-1]
                 break
+
+    def readline(self):
+        if not self.__line_iterator:
+            self.__line_iterator = iter(self)
+        try:
+            return six.next(self.__line_iterator)
+        except StopIteration:
+            return b''
+
+    def readlines(self):
+        return list(iter(self))
 
 
 class CloseUnderlyingMixin(object):

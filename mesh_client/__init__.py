@@ -290,6 +290,14 @@ class Message(object):
                 client._retrieve_message_chunk(msg_id, str(
                     i + 2))) for i in range(chunk_count - 1))))
 
+    def id(self):
+        """return the message id
+
+        Returns:
+            str: message id
+        """
+        return self._msg_id
+
     def read(self, n=None):
         """
         Read up to n bytes from the message, or read the remainder of the

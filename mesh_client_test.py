@@ -68,6 +68,33 @@ class MeshClientTest(TestCase):
         msg.acknowledge()
         self.assertEqual([], bob.list_messages())
 
+    def test_line_by_line(self):
+        alice = self.alice
+        bob = self.bob
+
+        message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2")
+        self.assertEqual([message_id], bob.list_messages())
+        msg = bob.retrieve_message(message_id)
+        self.assertEqual(list(iter(msg)), [b"Hello Bob 1\n", b"Hello Bob 2"])
+
+    def test_readline(self):
+        alice = self.alice
+        bob = self.bob
+
+        message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2")
+        self.assertEqual([message_id], bob.list_messages())
+        msg = bob.retrieve_message(message_id)
+        self.assertEqual(msg.readline(), b"Hello Bob 1\n")
+
+    def test_readlines(self):
+        alice = self.alice
+        bob = self.bob
+
+        message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2")
+        self.assertEqual([message_id], bob.list_messages())
+        msg = bob.retrieve_message(message_id)
+        self.assertEqual(msg.readlines(), [b"Hello Bob 1\n", b"Hello Bob 2"])
+
     def test_transparent_compression(self):
         alice = self.alice
         bob = self.bob

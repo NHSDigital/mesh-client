@@ -1,11 +1,11 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
 from unittest import TestCase, main
 import io
 import gzip
 import six
 import tempfile
 from .io_helpers import GzipCompressStream, GzipDecompressStream, \
-    CombineStreams, SplitStream
+    CombineStreams, SplitStream, IteratorMixin
 from six.moves.urllib.parse import urljoin
 from six.moves.urllib.request import pathname2url, urlopen
 from contextlib import closing
@@ -22,6 +22,23 @@ except ImportError:
 
 mebibyte = 1024 * 1024
 small_chunk = 10
+
+
+class FakeMixinUser(IteratorMixin):
+    def __init__(self, data, block_size):
+        self.backing_buffer = io.BytesIO(data)
+        self._IteratorMixin__block_size = block_size
+
+    def read(self, n):
+        return self.backing_buffer.read(n)
+
+MIXIN_DATA = b"""a
+aa
+aaa
+aaaa
+aaaaa
+aaaaaa
+"""
 
 
 class IOHelpersTest(TestCase):
@@ -209,6 +226,31 @@ class IOHelpersTest(TestCase):
         self.assertEqual(instance.read(10), b"")
         self.assertEqual(instance.read(), b"")
         self.assertEqual(result, b"Hello" * 20)
+
+    def test_iterator_mixin(self):
+        # import pudb
+        # pu.db
+        instance = FakeMixinUser(MIXIN_DATA, 4)
+        self.assertEqual(b'a\n', instance.readline())
+        self.assertEqual(b'aa\n', instance.readline())
+        self.assertEqual(b'aaa\n', instance.readline())
+        self.assertEqual(b'aaaa\n', instance.readline())
+        self.assertEqual(b'aaaaa\n', instance.readline())
+        self.assertEqual(b'aaaaaa\n', instance.readline())
+        self.assertEqual(b'', instance.readline())
+
+    def test_iterator_mixin_list(self):
+        # import pudb
+        # pu.db
+        instance = FakeMixinUser(MIXIN_DATA, 4)
+        self.assertEqual([
+            b'a\n',
+            b'aa\n',
+            b'aaa\n',
+            b'aaaa\n',
+            b'aaaaa\n',
+            b'aaaaaa\n',
+        ], instance.readlines())
 
 
 if __name__ == '__main__':

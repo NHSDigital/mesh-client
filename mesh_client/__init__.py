@@ -290,12 +290,32 @@ class Message(object):
                 client._retrieve_message_chunk(msg_id, str(
                     i + 2))) for i in range(chunk_count - 1))))
 
+    def id(self):
+        """return the message id
+
+        Returns:
+            str: message id
+        """
+        return self._msg_id
+
     def read(self, n=None):
         """
         Read up to n bytes from the message, or read the remainder of the
         message, if n is not provided.
         """
         return self._response.read(n)
+
+    def readline(self):
+        """
+        Read a single line from the message
+        """
+        return self._response.readline()
+
+    def readlines(self):
+        """
+        Read all lines from the message
+        """
+        return self._response.readlines()
 
     def close(self):
         """Close the stream underlying this message"""
@@ -320,6 +340,12 @@ class Message(object):
                 self.acknowledge()
         finally:
             self.close()
+
+    def __iter__(self):
+        """
+        Iterate through lines of the message
+        """
+        return iter(self._response)
 
 
 class _AuthTokenGenerator(object):

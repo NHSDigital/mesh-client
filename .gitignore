@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 /MANIFEST
 /.tox/
+.idea/
+.venv/
+build/
+help/

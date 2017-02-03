@@ -64,6 +64,7 @@ class MeshClient(object):
                  cert=None,
                  verify=None,
                  max_chunk_size=75 * 1024 * 1024,
+                 proxies=None,
                  transparent_compress=False):
         """
         Create a new MeshClient.
@@ -87,6 +88,7 @@ class MeshClient(object):
                                                     password)
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
+        self._proxies = proxies or {}
 
     def list_messages(self):
         """
@@ -96,7 +98,7 @@ class MeshClient(object):
             "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
             headers={"Authorization": self._token_generator()},
             cert=self._cert,
-            verify=self._verify)
+            verify=self._verify, proxies=self._proxies)
         return response.json()["messages"]
 
     def retrieve_message(self, message_id):
@@ -111,7 +113,7 @@ class MeshClient(object):
             headers={"Authorization": self._token_generator()},
             stream=True,
             cert=self._cert,
-            verify=self._verify)
+            verify=self._verify, proxies=self._proxies)
         return Message(message_id, response, self)
 
     def _retrieve_message_chunk(self, message_id, chunk_num):
@@ -121,7 +123,7 @@ class MeshClient(object):
             headers={"Authorization": self._token_generator()},
             stream=True,
             cert=self._cert,
-            verify=self._verify)
+            verify=self._verify, proxies=self._proxies)
         return response.raw
 
     def send_message(self,
@@ -184,7 +186,7 @@ class MeshClient(object):
             data=chunk1,
             headers=headers,
             cert=self._cert,
-            verify=self._verify)
+            verify=self._verify, proxies=self._proxies)
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)
@@ -204,7 +206,7 @@ class MeshClient(object):
                 data=maybe_compressed(chunk),
                 headers=headers,
                 cert=self._cert,
-                verify=self._verify)
+                verify=self._verify, proxies=self._proxies)
             response.raise_for_status()
 
         return message_id
@@ -221,7 +223,7 @@ class MeshClient(object):
                 "Authorization": self._token_generator(),
             },
             cert=self._cert,
-            verify=self._verify)
+            verify=self._verify, proxies=self._proxies)
         response.raise_for_status()
 
     def iterate_all_messages(self):

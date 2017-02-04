@@ -212,7 +212,7 @@ class MockMeshApplication:
             chunks = msg.setdefault("chunks", {})
             with closing(stream_from_wsgi_environ(environ)) as stream:
                 data = stream.read()
-            chunks[chunk_num] = data
+            chunks[chunk_num] = data.encode('zlib') if not environ.get('HTTP_CONTENT_ENCODING', None) else data
             start_response('202 Accepted', [])
             return []
 
@@ -223,9 +223,13 @@ class MockMeshApplication:
             msg = self.messages[chunk_msg]
             chunks = msg["chunks"]
             chunk = chunks[chunk_num]
+            if environ['HTTP_ACCEPT_ENCODING'] != "gzip":
+                chunk = chunk.decode('zlib')
+
             chunk_header = "{}:{}".format(chunk_num, len(chunks) + 1)
             start_response('200 OK', [
                 ('Content-Type', 'application/octet-stream'),
+                ('Content-Encoding', 'gzip'),
                 ('Mex-Chunk-Range', chunk_header)
             ])
             return [chunk]

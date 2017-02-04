@@ -84,11 +84,18 @@ class MeshClient(object):
         self._mailbox = mailbox
         self._cert = cert
         self._verify = verify
-        self._token_generator = _AuthTokenGenerator(shared_key, mailbox,
-                                                    password)
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
         self._proxies = proxies or {}
+
+        token_generator = _AuthTokenGenerator(shared_key, mailbox, password)
+
+        def headers_factory(extra_headers=None):
+            headers = {"Authorization": token_generator(), "Accept-Encoding": "gzip"}
+            headers.update(extra_headers or {})
+            return headers
+
+        self._headers = headers_factory
 
     def list_messages(self):
         """
@@ -96,9 +103,10 @@ class MeshClient(object):
         """
         response = requests.get(
             "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
-            headers={"Authorization": self._token_generator()},
+            headers=self._headers(),
             cert=self._cert,
-            verify=self._verify, proxies=self._proxies)
+            verify=self._verify,
+            proxies=self._proxies)
         return response.json()["messages"]
 
     def retrieve_message(self, message_id):
@@ -108,22 +116,22 @@ class MeshClient(object):
         """
         message_id = getattr(message_id, "_msg_id", message_id)
         response = requests.get(
-            "{}/messageexchange/{}/inbox/{}".format(self._url, self._mailbox,
-                                                    message_id),
-            headers={"Authorization": self._token_generator()},
+            "{}/messageexchange/{}/inbox/{}".format(self._url, self._mailbox, message_id),
+            headers=self._headers(),
             stream=True,
             cert=self._cert,
-            verify=self._verify, proxies=self._proxies)
+            verify=self._verify,
+            proxies=self._proxies)
         return Message(message_id, response, self)
 
     def _retrieve_message_chunk(self, message_id, chunk_num):
         response = requests.get(
-            "{}/messageexchange/{}/inbox/{}/{}".format(
-                self._url, self._mailbox, message_id, chunk_num),
-            headers={"Authorization": self._token_generator()},
+            "{}/messageexchange/{}/inbox/{}/{}".format(self._url, self._mailbox, message_id, chunk_num),
+            headers=self._headers(),
             stream=True,
             cert=self._cert,
-            verify=self._verify, proxies=self._proxies)
+            verify=self._verify,
+            proxies=self._proxies)
         return response.raw
 
     def send_message(self,
@@ -156,11 +164,11 @@ class MeshClient(object):
             lambda stream: GzipCompressStream(
                 stream) if transparent_compress else stream
         )
-        headers = {
-            "Authorization": self._token_generator(),
+        headers = self._headers({
             "Mex-From": self._mailbox,
             "Mex-To": recipient
-        }
+        })
+
         for key, value in kwargs.items():
             if key in _OPTIONAL_HEADERS:
                 headers[_OPTIONAL_HEADERS[key]] = str(value)
@@ -186,7 +194,8 @@ class MeshClient(object):
             data=chunk1,
             headers=headers,
             cert=self._cert,
-            verify=self._verify, proxies=self._proxies)
+            verify=self._verify,
+            proxies=self._proxies)
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)
@@ -194,19 +203,19 @@ class MeshClient(object):
 
         for i, chunk in enumerate(chunk_iterator):
             chunk_num = i + 2
-            headers = {
+            headers = self._headers({
                 "Content-Type": "application/octet-stream",
                 "Mex-Chunk-Range": "{}:{}".format(chunk_num, len(chunks)),
                 "Mex-From": self._mailbox,
-                "Authorization": self._token_generator()
-            }
+            })
             response = requests.post(
                 "{}/messageexchange/{}/outbox/{}/{}".format(
                     self._url, self._mailbox, message_id, chunk_num),
                 data=maybe_compressed(chunk),
                 headers=headers,
                 cert=self._cert,
-                verify=self._verify, proxies=self._proxies)
+                verify=self._verify,
+                proxies=self._proxies)
             response.raise_for_status()
 
         return message_id
@@ -219,11 +228,10 @@ class MeshClient(object):
         response = requests.put(
             "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(
                 self._url, self._mailbox, message_id),
-            headers={
-                "Authorization": self._token_generator(),
-            },
+            headers=self._headers(),
             cert=self._cert,
-            verify=self._verify, proxies=self._proxies)
+            verify=self._verify,
+            proxies=self._proxies)
         response.raise_for_status()
 
     def iterate_all_messages(self):

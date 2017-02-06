@@ -22,6 +22,7 @@ import ssl
 import random
 import traceback
 import os.path
+import zlib
 from contextlib import closing
 from hashlib import sha256
 from collections import OrderedDict
@@ -71,6 +72,8 @@ def _ok(content_type, data, start_response):
 def _compose(**kwargs):
     def handle(environ, start_response):
         path_component = shift_path_info(environ)
+        if not path_component:
+            return _ok('text/plain', '', start_response)
         if path_component in kwargs:
             return kwargs[path_component](environ, start_response)
         else:
@@ -130,8 +133,7 @@ class MockMeshApplication:
     def message_exchange(self):
 
         return self.authenticated(
-            _compose(
-                inbox=self.inbox, outbox=self.outbox))
+            _compose(inbox=self.inbox, outbox=self.outbox))
 
     def inbox(self, environ, start_response):
         request_method = environ["REQUEST_METHOD"]
@@ -212,7 +214,7 @@ class MockMeshApplication:
             chunks = msg.setdefault("chunks", {})
             with closing(stream_from_wsgi_environ(environ)) as stream:
                 data = stream.read()
-            chunks[chunk_num] = data.encode('zlib') if not environ.get('HTTP_CONTENT_ENCODING', None) else data
+            chunks[chunk_num] = zlib.compress(data) if not environ.get('HTTP_CONTENT_ENCODING', None) else data
             start_response('202 Accepted', [])
             return []
 
@@ -224,7 +226,7 @@ class MockMeshApplication:
             chunks = msg["chunks"]
             chunk = chunks[chunk_num]
             if environ['HTTP_ACCEPT_ENCODING'] != "gzip":
-                chunk = chunk.decode('zlib')
+                chunk = zlib.decompress(chunk)
 
             chunk_header = "{}:{}".format(chunk_num, len(chunks) + 1)
             start_response('200 OK', [
@@ -247,7 +249,7 @@ class MockMeshApplication:
         thread.start()
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, ex_type, value, tb):
         self.server.shutdown()
 
 
@@ -266,8 +268,7 @@ class SSLWSGIServer(WSGIServer, object):
 
     def get_request(self):
         (socket, addr) = super(SSLWSGIServer, self).get_request()
-        return (self.__context.wrap_socket(socket, server_side=True), addr)
-
+        return self.__context.wrap_socket(socket, server_side=True), addr
 
 if __name__ == "__main__":
     print("Serving on port 8000")

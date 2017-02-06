@@ -97,6 +97,22 @@ class MeshClient(object):
 
         self._headers = headers_factory
 
+    def handshake(self):
+        """
+        List all messages in user's inbox. Returns a list of message_ids
+        """
+        response = requests.post(
+            "{}/messageexchange/{}".format(self._url, self._mailbox),
+            headers=self._headers(),
+            cert=self._cert,
+            verify=self._verify,
+            proxies=self._proxies
+        )
+
+        response.raise_for_status()
+
+        return b'hello'
+
     def list_messages(self):
         """
         List all messages in user's inbox. Returns a list of message_ids

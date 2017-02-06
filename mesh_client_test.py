@@ -55,6 +55,12 @@ class MeshClientTest(TestCase):
             print("Message store", self.mock_app.messages)
             raise
 
+    def test_handshake(self):
+        alice = self.alice
+
+        hand_shook = alice.handshake()
+        self.assertEqual(hand_shook, b"hello")
+
     def test_send_receive(self):
         alice = self.alice
         bob = self.bob

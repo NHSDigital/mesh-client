@@ -97,6 +97,22 @@ class MeshClient(object):
 
         self._headers = headers_factory
 
+    def handshake(self):
+        """
+        List all messages in user's inbox. Returns a list of message_ids
+        """
+        response = requests.post(
+            "{}/messageexchange/{}".format(self._url, self._mailbox),
+            headers=self._headers(),
+            cert=self._cert,
+            verify=self._verify,
+            proxies=self._proxies
+        )
+
+        response.raise_for_status()
+
+        return b'hello'
+
     def list_messages(self):
         """
         List all messages in user's inbox. Returns a list of message_ids
@@ -124,7 +140,7 @@ class MeshClient(object):
             proxies=self._proxies)
         return Message(message_id, response, self)
 
-    def _retrieve_message_chunk(self, message_id, chunk_num):
+    def retrieve_message_chunk(self, message_id, chunk_num):
         response = requests.get(
             "{}/messageexchange/{}/inbox/{}/{}".format(self._url, self._mailbox, message_id, chunk_num),
             headers=self._headers(),
@@ -132,7 +148,7 @@ class MeshClient(object):
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies)
-        return response.raw
+        return response
 
     def send_message(self,
                      recipient,
@@ -208,6 +224,9 @@ class MeshClient(object):
                 "Mex-Chunk-Range": "{}:{}".format(chunk_num, len(chunks)),
                 "Mex-From": self._mailbox,
             })
+            if transparent_compress:
+                headers["Mex-Content-Compress"] = "TRUE"
+                headers["Content-Encoding"] = "gzip"
             response = requests.post(
                 "{}/messageexchange/{}/outbox/{}/{}".format(
                     self._url, self._mailbox, message_id, chunk_num),
@@ -291,13 +310,13 @@ class Message(object):
         chunk, chunk_count = map(
             int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
         maybe_decompress = (
-            lambda stream:
-            GzipDecompressStream(stream)
-            if headers.get("Content-Encoding") == "gzip" else stream
+            lambda resp:
+            GzipDecompressStream(resp.raw)
+            if resp.headers.get("Content-Encoding") == "gzip" else resp.raw
         )
         self._response = CombineStreams(
-            chain([maybe_decompress(response.raw)], (maybe_decompress(
-                client._retrieve_message_chunk(msg_id, str(
+            chain([maybe_decompress(response)], (maybe_decompress(
+                client.retrieve_message_chunk(msg_id, str(
                     i + 2))) for i in range(chunk_count - 1))))
 
     def id(self):

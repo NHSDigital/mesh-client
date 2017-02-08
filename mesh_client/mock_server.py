@@ -62,6 +62,7 @@ _not_authorized = _dumb_response_code(401, "Unauthorized")
 _forbidden = _dumb_response_code(403, "Forbidden")
 _simple_ok = _dumb_response_code(200, "OK")
 _bad_request = _dumb_response_code(400, "Bad Request")
+_server_error = _dumb_response_code(500, "Server Error")
 
 
 def _ok(content_type, data, start_response):
@@ -73,6 +74,18 @@ def _compose(**kwargs):
     def handle(environ, start_response):
         path_component = shift_path_info(environ)
         if not path_component:
+
+            # required auth headers
+            auth_headers = [
+                'HTTP_MEX_CLIENTVERSION',
+                'HTTP_MEX_JAVAVERSION',
+                'HTTP_MEX_OSARCHITECTURE',
+                'HTTP_MEX_OSNAME',
+                'HTTP_MEX_OSVERSION'
+            ]
+            for auth_header in auth_headers:
+                if auth_header not in environ:
+                    return _server_error(environ, start_response)
             return _ok('text/plain', '', start_response)
         if path_component in kwargs:
             return kwargs[path_component](environ, start_response)

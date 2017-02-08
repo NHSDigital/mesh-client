@@ -103,7 +103,13 @@ class MeshClient(object):
         """
         response = requests.post(
             "{}/messageexchange/{}".format(self._url, self._mailbox),
-            headers=self._headers(),
+            headers=self._headers({
+                "mex-ClientVersion": "mesh_client==0.6.0",
+                "mex-OSArchitecture": "x64",
+                "mex-OSName": "ubuntu",
+                "mex-OSVersion": "14.04",
+                "mex-JavaVersion": "NA"
+            }),
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies

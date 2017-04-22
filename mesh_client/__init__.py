@@ -384,6 +384,10 @@ class Message(object):
         """
         return self._mex_headers.get(key, default)
 
+    def mex_headers(self):
+        """returns a generator iteritems for all the headers"""
+        return self._mex_headers.iteritems()
+
     def __enter__(self):
         return self
 

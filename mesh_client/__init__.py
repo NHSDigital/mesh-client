@@ -306,7 +306,14 @@ class Message(object):
     def __init__(self, msg_id, response, client):
         self._msg_id = msg_id
         self._client = client
+        self._mex_headers = {}
+
         headers = response.headers
+        for key, value in headers.iteritems():
+            lkey = key.lower()
+            if lkey.startswith('mex-'):
+                self._mex_headers[lkey[4:]] = value
+
         for key, value in _RECEIVE_HEADERS.items():
             header_value = headers.get(value, None)
             if key in ["compressed", "encrypted"]:
@@ -365,6 +372,17 @@ class Message(object):
         Acknowledge this message, and delete it from MESH
         """
         self._client.acknowledge_message(self._msg_id)
+
+    def mex_header(self, key, default=None):
+        """ get a mex header if present 
+        
+        Args:
+            key (str): key 
+            default (any): default value
+        Returns:
+            str: the mex header value
+        """
+        return self._mex_headers.get(key, default)
 
     def __enter__(self):
         return self

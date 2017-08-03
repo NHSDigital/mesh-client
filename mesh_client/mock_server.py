@@ -252,9 +252,9 @@ class MockMeshApplication:
         return handle
 
     def __enter__(self):
-        port = random.randint(32768, 65535)
+        self.server = make_server("", 0, self, server_class=SSLWSGIServer)
+        port = self.server.server_address[1]
         self.uri = "https://localhost:{}".format(port)
-        self.server = make_server("", port, self, server_class=SSLWSGIServer)
         thread = Thread(
             target=self.server.serve_forever,
             kwargs={"poll_interval": 0.01})

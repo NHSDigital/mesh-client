@@ -309,7 +309,7 @@ class Message(object):
         self._mex_headers = {}
 
         headers = response.headers
-        for key, value in headers.iteritems():
+        for key, value in six.iteritems(headers):
             lkey = key.lower()
             if lkey.startswith('mex-'):
                 self._mex_headers[lkey[4:]] = value
@@ -374,10 +374,10 @@ class Message(object):
         self._client.acknowledge_message(self._msg_id)
 
     def mex_header(self, key, default=None):
-        """ get a mex header if present 
-        
+        """ get a mex header if present
+
         Args:
-            key (str): key 
+            key (str): key
             default (any): default value
         Returns:
             str: the mex header value
@@ -386,7 +386,7 @@ class Message(object):
 
     def mex_headers(self):
         """returns a generator iteritems for all the headers"""
-        return self._mex_headers.iteritems()
+        return six.iteritems(self._mex_headers)
 
     def __enter__(self):
         return self

@@ -113,6 +113,7 @@ class MeshClientTest(TestCase):
         print("Receiving")
         msg = bob.retrieve_message(message_id)
         self.assertEqual(msg.read(), b"Hello Bob Compressed")
+        self.assertEqual(msg.mex_header('from'), 'alice')
         msg.acknowledge()
         self.assertEqual([], bob.list_messages())
 

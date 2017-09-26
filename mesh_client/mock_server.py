@@ -17,9 +17,8 @@ they should only be used in test environments.
 from __future__ import print_function
 import hmac
 import json
-import uuid
+import datetime
 import ssl
-import random
 import traceback
 import os.path
 import zlib
@@ -108,12 +107,17 @@ class MockMeshApplication:
 
     This will spin up a MESH instance on a random port, and make its uri
     available as app.uri. The instance will be shut down when the context
-    manager exits.
+    manager exits. These capabilities are also available as start_server and
+    stop_server, for use in cases where context managers are not convenient.
+
+    Subclasses may wish to override make_message_id, to allow testing with
+    different message id formats.
     """
 
     def __init__(self, shared_key=b"BackBone"):
         self.messages = {}
         self._shared_key = shared_key
+        self._msg_count = 0
 
     @property
     def __call__(self):
@@ -213,7 +217,7 @@ class MockMeshApplication:
         headers = {_OPTIONAL_HEADERS[key]: value
                    for key, value in environ.items()
                    if key in _OPTIONAL_HEADERS}
-        msg_id = str(uuid.uuid4())
+        msg_id = self.make_message_id()
         mailbox[msg_id] = {"headers": headers, "data": data}
         self.messages[msg_id] = mailbox[msg_id]
         return _ok("application/json",
@@ -251,7 +255,32 @@ class MockMeshApplication:
 
         return handle
 
+    def make_message_id(self):
+        """
+        Create a new message id. By default, this uses roughly the same format
+        as MESH (although the format is undocumented), but it can be overridden
+        in subclasses for different behaviour
+        """
+        n = self._msg_count
+        self._msg_count += 1
+        return "{ts:%Y%m%d%H%M%S%f}_{num:06d}".format(
+            ts=datetime.datetime.now(),
+            num=n
+        )
+
     def __enter__(self):
+        self.start_server()
+        return self
+
+    def __exit__(self, ex_type, value, tb):
+        self.stop_server()
+
+    def start_server(self):
+        """
+        Start an embedded web server, running the mock MESH app. After running
+        this method, the uri of the running MESH instance will be available
+        as self.uri
+        """
         self.server = make_server("", 0, self, server_class=SSLWSGIServer)
         port = self.server.server_address[1]
         self.uri = "https://localhost:{}".format(port)
@@ -262,7 +291,12 @@ class MockMeshApplication:
         thread.start()
         return self
 
-    def __exit__(self, ex_type, value, tb):
+    def stop_server(self):
+        """
+        Stop a server that was started by start_server(). This has no effect
+        when the app is run from an external WSGI container, such as uWSGI,
+        GUnicorn or Cheroot.
+        """
         self.server.shutdown()
 
 

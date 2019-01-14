@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name='Mesh Client',
-    version='0.8.0',
+    version='0.8.1',
     description='Client for NHS Digital \'s MESH messaging system',
     author='James Pickering',
     author_email='james.pickering@xml-solutions.com',

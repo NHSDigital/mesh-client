@@ -171,6 +171,12 @@ class SplitStream(CloseUnderlyingMixin):
         elif hasattr(data, "fileno"):
             self._underlying = data
             self._length = os.fstat(data.fileno()).st_size
+        elif hasattr(data, "_content_length"):
+            self._underlying = data
+            self._length = data._content_length
+        elif isinstance(data, dict) and "Body" in data and "ContentLength" in data:
+            self._underlying = data["Body"]
+            self._length = data["ContentLength"]
         else:
             raise TypeError("data must be a bytes, file, or urllib response")
         self._chunk_size = chunk_size

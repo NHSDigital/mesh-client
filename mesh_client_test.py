@@ -1,16 +1,37 @@
 from __future__ import absolute_import, print_function
 from unittest import TestCase, main
+import mock
+import json
+import requests
 import signal
 import traceback
 import sys
+
 from mesh_client import MeshClient, MeshError, default_ssl_opts
-from mesh_client.mock_server import MockMeshApplication
+from mesh_client.io_helpers import SplitStream
+from mesh_client.mock_server import MockMeshApplication, MockMeshRetryApplication
 from six.moves.urllib.error import HTTPError
 
 alice_mailbox = 'alice'
 alice_password = 'password'
 bob_mailbox = 'bob'
 bob_password = 'password'
+
+class MockResponse:
+    def __init__(self, json_data, status_code):
+        self.json_data = json_data
+        self.status_code = status_code
+
+    def json(self):
+        return self.json_data
+
+
+func = requests.post
+def wrapped_post(url, data, **kwargs):
+    response = func(url, data, **kwargs)
+    print(url)
+    print('Received response: {} - {}'.format(response.text, len(response.text)))
+    return response
 
 
 def print_stack_frames(signum=None, frame=None):
@@ -28,8 +49,9 @@ class TestError(Exception):
 
 class MeshClientTest(TestCase):
     def run(self, result=None):
+        print('==> in run')
         try:
-            with MockMeshApplication() as mock_app:
+            with MockMeshRetryApplication() as mock_app:
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
                 self.alice = MeshClient(
@@ -60,6 +82,29 @@ class MeshClientTest(TestCase):
 
         hand_shook = alice.handshake()
         self.assertEqual(hand_shook, b"hello")
+
+    @mock.patch('requests.post')
+    @mock.patch('mesh_client.SplitStream', autospec=True)
+    def test_chunk_retry(self, splitstream, mock_post):
+
+        def post_request(*args, **kwargs):
+            print('Arguments: {}'.format(*args))
+            response = func(*args, **kwargs)
+            return response
+
+        chunks =  [b'Hello ', b'World ', b'!!']
+        splitstream.return_value = chunks
+        mock_post.side_effect = post_request
+
+        alice = self.alice
+        bob = self.bob
+
+        retry_config = json.dumps([(2, 1)])
+        message_id = alice.send_message(bob_mailbox, b"Hello", retry_config=retry_config)
+
+        received = bob.retrieve_message(message_id).read()
+        print('==> Received msg: {}'.format(received))
+        self.assertEqual(received, ''.join(chunks))
 
     def test_send_receive(self):
         alice = self.alice

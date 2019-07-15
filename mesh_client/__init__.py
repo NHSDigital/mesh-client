@@ -6,10 +6,12 @@ import datetime
 import os.path
 import requests
 import six
+import time
 from itertools import chain
 from hashlib import sha256
 from .io_helpers import \
     CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
+from requests.exceptions import HTTPError
 
 _data_dir = os.path.dirname(__file__)
 
@@ -33,7 +35,8 @@ _OPTIONAL_HEADERS = {
     "process_id": "Mex-ProcessID",
     "subject": "Mex-Subject",
     "encrypted": "Mex-Encrypted",
-    "compressed": "Mex-Compressed"
+    "compressed": "Mex-Compressed",
+    "retry_config": "Mex-RetryConfig",
 }
 
 _RECEIVE_HEADERS = {
@@ -64,6 +67,7 @@ class MeshClient(object):
                  cert=None,
                  verify=None,
                  max_chunk_size=75 * 1024 * 1024,
+                 max_chunk_retries=3,
                  proxies=None,
                  transparent_compress=False):
         """
@@ -87,6 +91,7 @@ class MeshClient(object):
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
         self._proxies = proxies or {}
+        self.max_chunk_retries = max_chunk_retries
 
         token_generator = _AuthTokenGenerator(shared_key, mailbox, password)
 
@@ -156,6 +161,9 @@ class MeshClient(object):
             proxies=self._proxies)
         return response
 
+    def get_chunk_retry_delay(self, retry_attempt):
+        return 1 # retry_attempt*retry_attempt
+
     def send_message(self,
                      recipient,
                      data,
@@ -218,11 +226,13 @@ class MeshClient(object):
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies)
+        print('==> response1: {}'.format(response1))
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)
         message_id = json_resp["messageID"]
 
+        retry_attempt = 1
         for i, chunk in enumerate(chunk_iterator):
             chunk_num = i + 2
             headers = self._headers({
@@ -233,15 +243,42 @@ class MeshClient(object):
             if transparent_compress:
                 headers["Mex-Content-Compress"] = "TRUE"
                 headers["Content-Encoding"] = "gzip"
-            response = requests.post(
-                "{}/messageexchange/{}/outbox/{}/{}".format(
-                    self._url, self._mailbox, message_id, chunk_num),
-                data=maybe_compressed(chunk),
-                headers=headers,
-                cert=self._cert,
-                verify=self._verify,
-                proxies=self._proxies)
-            response.raise_for_status()
+
+            try:
+                response = requests.post(
+                    "{}/messageexchange/{}/outbox/{}/{}".format(
+                        self._url, self._mailbox, message_id, chunk_num),
+                    data=maybe_compressed(chunk),
+                    headers=headers,
+                    cert=self._cert,
+                    verify=self._verify,
+                    proxies=self._proxies)
+                response.raise_for_status()
+            except HTTPError as h:
+                response = None
+                num_chunks = len(chunks)
+                while retry_attempt <= self.max_chunk_retries:
+                    delay = retry_attempt
+                    print('Attempting retry {} time after a delay of {} sec'.format(retry_attempt, delay))
+                    time.sleep(delay)
+
+                    response = requests.post(
+                        "{}/messageexchange/{}/outbox/{}/{}".format(
+                            self._url, self._mailbox, message_id, chunk_num),
+                        data=maybe_compressed(chunk),
+                        headers=headers,
+                        cert=self._cert,
+                        verify=self._verify,
+                        proxies=self._proxies)
+
+                    # check other successful response codes
+                    if response.status_code == 200 or response.status_code == 202:
+                        # print('Retry attempt ({}) successful, break'.format(retry_attempt))
+                        break
+
+                    retry_attempt += 1
+
+                response.raise_for_status()
 
         return message_id
 

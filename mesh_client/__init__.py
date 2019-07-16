@@ -161,9 +161,6 @@ class MeshClient(object):
             proxies=self._proxies)
         return response
 
-    def get_chunk_retry_delay(self, retry_attempt):
-        return 1 # retry_attempt*retry_attempt
-
     def send_message(self,
                      recipient,
                      data,

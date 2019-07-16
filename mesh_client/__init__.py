@@ -36,7 +36,7 @@ _OPTIONAL_HEADERS = {
     "subject": "Mex-Subject",
     "encrypted": "Mex-Encrypted",
     "compressed": "Mex-Compressed",
-    "retry_config": "Mex-RetryConfig",
+    "retry_options": "Mex-RetryOptions",
 }
 
 _RECEIVE_HEADERS = {
@@ -226,13 +226,11 @@ class MeshClient(object):
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies)
-        print('==> response1: {}'.format(response1))
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)
         message_id = json_resp["messageID"]
 
-        retry_attempt = 1
         for i, chunk in enumerate(chunk_iterator):
             chunk_num = i + 2
             headers = self._headers({
@@ -256,11 +254,11 @@ class MeshClient(object):
                 response.raise_for_status()
             except HTTPError as h:
                 response = None
+                retry_attempt = 0
                 num_chunks = len(chunks)
-                while retry_attempt <= self.max_chunk_retries:
-                    delay = retry_attempt
-                    print('Attempting retry {} time after a delay of {} sec'.format(retry_attempt, delay))
-                    time.sleep(delay)
+                while retry_attempt < self.max_chunk_retries:
+                    # non-linear delay in terms of squares
+                    time.sleep(retry_attempt**2)
 
                     response = requests.post(
                         "{}/messageexchange/{}/outbox/{}/{}".format(
@@ -273,7 +271,6 @@ class MeshClient(object):
 
                     # check other successful response codes
                     if response.status_code == 200 or response.status_code == 202:
-                        # print('Retry attempt ({}) successful, break'.format(retry_attempt))
                         break
 
                     retry_attempt += 1

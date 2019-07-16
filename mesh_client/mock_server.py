@@ -44,7 +44,7 @@ _OPTIONAL_HEADERS = {
     "HTTP_MEX_CHUNK_RANGE": "Mex-Chunk-Range",
     "HTTP_MEX_FROM": "Mex-From",
     "HTTP_MEX_TO": "Mex-To",
-    "HTTP_MEX_RETRYCONFIG": "Mex-RetryConfig",
+    "HTTP_MEX_RETRYOPTIONS": "Mex-RetryOptions",
 }
 
 
@@ -306,30 +306,22 @@ class MockMeshApplication:
         self.server.shutdown()
 
 
-class MockMeshRetryApplication(MockMeshApplication, object):
+class MockMeshChunkRetryApplication(MockMeshApplication, object):
     def __init__(self):
-        self.retry_attempts = {}
         self.allowed_retries = {}
-        super(MockMeshRetryApplication, self).__init__()
+        super(MockMeshChunkRetryApplication, self).__init__()
 
     def outbox(self, environ, start_response):
         current_chunk = int(environ['HTTP_MEX_CHUNK_RANGE'].split(':')[0])
         if current_chunk == 1:
-            self.allowed_retries = {p[0]: p[1] for p in json.loads(environ['HTTP_MEX_RETRYCONFIG'])}
+            self.allowed_retries = {p[0]: p[1] for p in json.loads(environ['HTTP_MEX_RETRYOPTIONS'])}
 
         if current_chunk in self.allowed_retries.keys():
-            if current_chunk not in self.retry_attempts:
-                self.retry_attempts[current_chunk] = 1
-
-            if self.retry_attempts[current_chunk] <= self.allowed_retries[current_chunk]:
-                print('ERROR RESPONSE')
-                self.retry_attempts[current_chunk] += 1
-                # data = json.dumps({
-                #     "retry_chunk_num": str(current_chunk),
-                # }).encode("utf-8")
+            if self.allowed_retries[current_chunk] >= 0:
+                self.allowed_retries[current_chunk] -= 1
                 return _error("application/json", '', start_response)
 
-        return super(MockMeshRetryApplication, self).outbox(environ, start_response)
+        return super(MockMeshChunkRetryApplication, self).outbox(environ, start_response)
 
 
 
@@ -353,5 +345,5 @@ class SSLWSGIServer(WSGIServer, object):
 if __name__ == "__main__":
     print("Serving on port 8000")
     server = make_server(
-        "", 8000, MockMeshRetryApplication(), server_class=SSLWSGIServer)
+        "", 8000, MockMeshChunkRetryApplication(), server_class=SSLWSGIServer)
     server.serve_forever(0.01)

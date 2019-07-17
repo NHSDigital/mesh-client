@@ -7,6 +7,7 @@ import os.path
 import requests
 import six
 import time
+from io import BytesIO
 from itertools import chain
 from hashlib import sha256
 from .io_helpers import \
@@ -67,9 +68,9 @@ class MeshClient(object):
                  cert=None,
                  verify=None,
                  max_chunk_size=75 * 1024 * 1024,
-                 max_chunk_retries=3,
                  proxies=None,
-                 transparent_compress=False):
+                 transparent_compress=False,
+                 max_chunk_retries=3):
         """
         Create a new MeshClient.
 
@@ -229,6 +230,13 @@ class MeshClient(object):
         message_id = json_resp["messageID"]
 
         for i, chunk in enumerate(chunk_iterator):
+            data = maybe_compressed(chunk)
+
+            if self.max_chunk_retries > 1:
+                buf = BytesIO(data)
+            else:
+                buf = data
+
             chunk_num = i + 2
             headers = self._headers({
                 "Content-Type": "application/octet-stream",
@@ -243,24 +251,28 @@ class MeshClient(object):
                 response = requests.post(
                     "{}/messageexchange/{}/outbox/{}/{}".format(
                         self._url, self._mailbox, message_id, chunk_num),
-                    data=maybe_compressed(chunk),
+                    data=buf,
                     headers=headers,
                     cert=self._cert,
                     verify=self._verify,
                     proxies=self._proxies)
                 response.raise_for_status()
             except HTTPError as h:
+                if self.max_chunk_retries == 1:
+                    raise HTTPError()
+
                 response = None
                 retry_attempt = 0
                 num_chunks = len(chunks)
                 while retry_attempt < self.max_chunk_retries:
+                    buf.seek(0)
                     # non-linear delay in terms of squares
                     time.sleep(retry_attempt**2)
 
                     response = requests.post(
                         "{}/messageexchange/{}/outbox/{}/{}".format(
                             self._url, self._mailbox, message_id, chunk_num),
-                        data=maybe_compressed(chunk),
+                        data=buf,
                         headers=headers,
                         cert=self._cert,
                         verify=self._verify,

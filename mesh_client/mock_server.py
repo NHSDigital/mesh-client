@@ -43,8 +43,7 @@ _OPTIONAL_HEADERS = {
     "HTTP_MEX_COMPRESSED": "Mex-Compressed",
     "HTTP_MEX_CHUNK_RANGE": "Mex-Chunk-Range",
     "HTTP_MEX_FROM": "Mex-From",
-    "HTTP_MEX_TO": "Mex-To",
-    "HTTP_MEX_RETRYOPTIONS": "Mex-RetryOptions",
+    "HTTP_MEX_TO": "Mex-To"
 }
 
 
@@ -311,10 +310,13 @@ class MockMeshChunkRetryApplication(MockMeshApplication, object):
         self.allowed_retries = {}
         super(MockMeshChunkRetryApplication, self).__init__()
 
+    def set_chunk_retry_options(self, options):
+        self.retry_options = options
+
     def outbox(self, environ, start_response):
         current_chunk = int(environ['HTTP_MEX_CHUNK_RANGE'].split(':')[0])
         if current_chunk == 1:
-            self.allowed_retries = {p[0]: p[1] for p in json.loads(environ['HTTP_MEX_RETRYOPTIONS'])}
+            self.allowed_retries = {p[0]: p[1] for p in json.loads(self.retry_options)}
 
         if current_chunk in self.allowed_retries.keys():
             if self.allowed_retries[current_chunk] >= 0:

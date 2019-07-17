@@ -36,8 +36,7 @@ _OPTIONAL_HEADERS = {
     "process_id": "Mex-ProcessID",
     "subject": "Mex-Subject",
     "encrypted": "Mex-Encrypted",
-    "compressed": "Mex-Compressed",
-    "retry_options": "Mex-RetryOptions",
+    "compressed": "Mex-Compressed"
 }
 
 _RECEIVE_HEADERS = {
@@ -70,7 +69,7 @@ class MeshClient(object):
                  max_chunk_size=75 * 1024 * 1024,
                  proxies=None,
                  transparent_compress=False,
-                 max_chunk_retries=3):
+                 max_chunk_retries=0):
         """
         Create a new MeshClient.
 
@@ -232,7 +231,7 @@ class MeshClient(object):
         for i, chunk in enumerate(chunk_iterator):
             data = maybe_compressed(chunk)
 
-            if self.max_chunk_retries > 1:
+            if self.max_chunk_retries > 0:
                 buf = BytesIO(data)
             else:
                 buf = data
@@ -247,27 +246,13 @@ class MeshClient(object):
                 headers["Mex-Content-Compress"] = "TRUE"
                 headers["Content-Encoding"] = "gzip"
 
-            try:
-                response = requests.post(
-                    "{}/messageexchange/{}/outbox/{}/{}".format(
-                        self._url, self._mailbox, message_id, chunk_num),
-                    data=buf,
-                    headers=headers,
-                    cert=self._cert,
-                    verify=self._verify,
-                    proxies=self._proxies)
-                response.raise_for_status()
-            except HTTPError as h:
-                if self.max_chunk_retries == 1:
-                    raise HTTPError()
-
-                response = None
-                retry_attempt = 0
-                num_chunks = len(chunks)
-                while retry_attempt < self.max_chunk_retries:
+            response = None
+            for i in range(self.max_chunk_retries + 1):
+                try:
                     buf.seek(0)
+
                     # non-linear delay in terms of squares
-                    time.sleep(retry_attempt**2)
+                    time.sleep(i**2)
 
                     response = requests.post(
                         "{}/messageexchange/{}/outbox/{}/{}".format(
@@ -282,8 +267,11 @@ class MeshClient(object):
                     if response.status_code == 200 or response.status_code == 202:
                         break
 
-                    retry_attempt += 1
-
+                    response.raise_for_status()
+                except HTTPError as h:
+                    if self.max_chunk_retries == 0:
+                        raise HTTPError()
+            else:
                 response.raise_for_status()
 
         return message_id

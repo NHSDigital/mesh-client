@@ -248,29 +248,24 @@ class MeshClient(object):
 
             response = None
             for i in range(self.max_chunk_retries + 1):
-                try:
+                if self.max_chunk_retries > 0:
                     buf.seek(0)
 
-                    # non-linear delay in terms of squares
-                    time.sleep(i**2)
+                # non-linear delay in terms of squares
+                time.sleep(i**2)
 
-                    response = requests.post(
-                        "{}/messageexchange/{}/outbox/{}/{}".format(
-                            self._url, self._mailbox, message_id, chunk_num),
-                        data=buf,
-                        headers=headers,
-                        cert=self._cert,
-                        verify=self._verify,
-                        proxies=self._proxies)
+                response = requests.post(
+                    "{}/messageexchange/{}/outbox/{}/{}".format(
+                        self._url, self._mailbox, message_id, chunk_num),
+                    data=buf,
+                    headers=headers,
+                    cert=self._cert,
+                    verify=self._verify,
+                    proxies=self._proxies)
 
-                    # check other successful response codes
-                    if response.status_code == 200 or response.status_code == 202:
-                        break
-
-                    response.raise_for_status()
-                except HTTPError as h:
-                    if self.max_chunk_retries == 0:
-                        raise HTTPError()
+                # check other successful response codes
+                if response.status_code == 200 or response.status_code == 202:
+                    break
             else:
                 response.raise_for_status()
 

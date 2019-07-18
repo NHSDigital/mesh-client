@@ -12,7 +12,6 @@ from itertools import chain
 from hashlib import sha256
 from .io_helpers import \
     CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
-from requests.exceptions import HTTPError
 
 _data_dir = os.path.dirname(__file__)
 
@@ -267,6 +266,7 @@ class MeshClient(object):
                 if response.status_code == 200 or response.status_code == 202:
                     break
             else:
+                print (response.content)
                 response.raise_for_status()
 
         return message_id

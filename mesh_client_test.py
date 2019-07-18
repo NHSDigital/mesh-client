@@ -8,6 +8,9 @@ import traceback
 import sys
 
 from collections import namedtuple
+
+from hamcrest import assert_that, equal_to
+
 from mesh_client import MeshClient, MeshError, default_ssl_opts
 from mesh_client.io_helpers import SplitStream
 from mesh_client.mock_server import MockMeshApplication, MockMeshChunkRetryApplication
@@ -203,6 +206,7 @@ class MeshClientTest(TestCase):
 
 class MeshChunkRetryClientTest(TestCase):
     def run(self, result=None):
+        self.chunk_retry_call_counts = {}
         try:
             with MockMeshChunkRetryApplication() as mock_app:
                 self.mock_app = mock_app
@@ -233,6 +237,13 @@ class MeshChunkRetryClientTest(TestCase):
             raise
 
     def wrapped_post(self, url, data, **kwargs):
+        current_chunk = int(kwargs['headers']['Mex-Chunk-Range'].split(':')[0])
+        if current_chunk not in self.chunk_retry_call_counts.keys():
+            self.chunk_retry_call_counts[current_chunk] = 0
+        else:
+            self.chunk_retry_call_counts[current_chunk] += 1
+
+        print('Current chunk call counts: {}'.format(self.chunk_retry_call_counts))
         response = unmocked_post(url, data, **kwargs)
         return response
 
@@ -255,6 +266,36 @@ class MeshChunkRetryClientTest(TestCase):
 
         received = bob.retrieve_message(message_id).read()
         self.assertEqual(received, ''.join(chunks))
+
+        assert_that(self.chunk_retry_call_counts[1], equal_to(0))
+        assert_that(self.chunk_retry_call_counts[2], equal_to(3))
+        assert_that(self.chunk_retry_call_counts[3], equal_to(0))
+
+    @mock.patch('requests.post')
+    @mock.patch('mesh_client.SplitStream', autospec=True)
+    def test_chunk_all_retries_fail(self, splitstream, mock_post):
+        chunks = [b'Hello ', b'World ', b'!!']
+        splitstream.return_value = chunks
+        mock_post.side_effect = self.wrapped_post
+
+        alice = self.alice
+        bob = self.bob
+
+        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
+
+        options = json.dumps([chunk_options(2, 3)])
+        self.mock_app.set_chunk_retry_options(options)
+
+        # try:
+        #     with alice.send_message(bob_mailbox, b"Hello") as message_id:
+        #         self.assertEqual(message_id, 'test')
+        #         raise TestError()
+        # except TestError:
+        #     pass
+        self.assertRaises(requests.exceptions.HTTPError, alice.send_message, bob_mailbox, b"Hello")
+
+        assert_that(self.chunk_retry_call_counts[1], equal_to(0))
+        assert_that(self.chunk_retry_call_counts[2], equal_to(3))
 
 
 if __name__ == "__main__":

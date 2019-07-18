@@ -46,7 +46,7 @@ class TestError(Exception):
 class MeshClientTest(TestCase):
     def run(self, result=None):
         try:
-            with MockMeshChunkRetryApplication() as mock_app:
+            with MockMeshApplication() as mock_app:
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
                 self.alice = MeshClient(
@@ -72,33 +72,11 @@ class MeshClientTest(TestCase):
             print("Message store", self.mock_app.messages)
             raise
 
-    def wrapped_post(self, url, data, **kwargs):
-        response = unmocked_post(url, data, **kwargs)
-        return response
-
     def test_handshake(self):
         alice = self.alice
 
         hand_shook = alice.handshake()
         self.assertEqual(hand_shook, b"hello")
-
-    @mock.patch('requests.post')
-    @mock.patch('mesh_client.SplitStream', autospec=True)
-    def test_chunk_retries(self, splitstream, mock_post):
-        chunks =  [b'Hello ', b'World ', b'!!']
-        splitstream.return_value = chunks
-        mock_post.side_effect = self.wrapped_post
-
-        alice = self.alice
-        bob = self.bob
-
-        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
-
-        retry_options = json.dumps([chunk_options(2, 2), chunk_options(3, 2)])
-        message_id = alice.send_message(bob_mailbox, b"Hello", retry_options=retry_options)
-
-        received = bob.retrieve_message(message_id).read()
-        self.assertEqual(received, ''.join(chunks))
 
     def test_send_receive(self):
         alice = self.alice
@@ -221,6 +199,62 @@ class MeshClientTest(TestCase):
         alice = self.alice
         with self.assertRaises(MeshError):
             alice.send_message(bob_mailbox, b"")
+
+
+class MeshChunkRetryClientTest(TestCase):
+    def run(self, result=None):
+        try:
+            with MockMeshChunkRetryApplication() as mock_app:
+                self.mock_app = mock_app
+                self.uri = mock_app.uri
+                self.alice = MeshClient(
+                    self.uri,
+                    alice_mailbox,
+                    alice_password,
+                    max_chunk_size=5,
+                    max_chunk_retries=3,
+                    **default_ssl_opts)
+                self.bob = MeshClient(
+                    self.uri,
+                    bob_mailbox,
+                    bob_password,
+                    max_chunk_size=5,
+                    max_chunk_retries=3,
+                    **default_ssl_opts)
+                super(MeshChunkRetryClientTest, self).run(result)
+        except HTTPError as e:
+            print(e.read())
+            print_stack_frames()
+            print("Message store", self.mock_app.messages)
+            raise
+        except:
+            print_stack_frames()
+            print("Message store", self.mock_app.messages)
+            raise
+
+    def wrapped_post(self, url, data, **kwargs):
+        response = unmocked_post(url, data, **kwargs)
+        return response
+
+    @mock.patch('requests.post')
+    @mock.patch('mesh_client.SplitStream', autospec=True)
+    def test_chunk_retries(self, splitstream, mock_post):
+        chunks =  [b'Hello ', b'World ', b'!!']
+        splitstream.return_value = chunks
+        mock_post.side_effect = self.wrapped_post
+
+        alice = self.alice
+        bob = self.bob
+
+        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
+
+        options = json.dumps([chunk_options(2, 2)])
+        self.mock_app.set_chunk_retry_options(options)
+
+        message_id = alice.send_message(bob_mailbox, b"Hello")
+
+        received = bob.retrieve_message(message_id).read()
+        self.assertEqual(received, ''.join(chunks))
 
 
 if __name__ == "__main__":

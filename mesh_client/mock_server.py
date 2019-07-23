@@ -316,15 +316,14 @@ class MockMeshChunkRetryApplication(MockMeshApplication, object):
     def outbox(self, environ, start_response):
         current_chunk = int(environ['HTTP_MEX_CHUNK_RANGE'].split(':')[0])
         if current_chunk == 1:
-            self.allowed_retries = {p[0]: p[1] for p in json.loads(self.retry_options)}
+            self.allowed_retries = {p[0]: p[1] for p in self.retry_options}
 
-        if current_chunk in self.allowed_retries.keys():
+        if current_chunk in self.allowed_retries:
             if self.allowed_retries[current_chunk] >= 0:
                 self.allowed_retries[current_chunk] -= 1
                 return _error("application/json", '', start_response)
 
         return super(MockMeshChunkRetryApplication, self).outbox(environ, start_response)
-
 
 
 _data_dir = os.path.dirname(__file__)
@@ -344,8 +343,9 @@ class SSLWSGIServer(WSGIServer, object):
         (socket, addr) = super(SSLWSGIServer, self).get_request()
         return self.__context.wrap_socket(socket, server_side=True), addr
 
+
 if __name__ == "__main__":
     print("Serving on port 8000")
     server = make_server(
-        "", 8000, MockMeshChunkRetryApplication(), server_class=SSLWSGIServer)
+        "", 8000, MockMeshApplication(), server_class=SSLWSGIServer)
     server.serve_forever(0.01)

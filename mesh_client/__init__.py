@@ -231,6 +231,8 @@ class MeshClient(object):
             data = maybe_compressed(chunk)
 
             if self.max_chunk_retries > 0:
+                if hasattr(data, 'read'):
+                    data = data.read()
                 buf = BytesIO(data)
             else:
                 buf = data
@@ -266,7 +268,6 @@ class MeshClient(object):
                 if response.status_code == 200 or response.status_code == 202:
                     break
             else:
-                print (response.content)
                 response.raise_for_status()
 
         return message_id

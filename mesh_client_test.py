@@ -7,9 +7,6 @@ import traceback
 import sys
 
 from collections import namedtuple
-
-from hamcrest import assert_that, equal_to
-
 from mesh_client import MeshClient, MeshError, default_ssl_opts
 from mesh_client.mock_server import MockMeshApplication, MockMeshChunkRetryApplication
 from six.moves.urllib.error import HTTPError
@@ -259,11 +256,11 @@ class MeshChunkRetryClientTest(TestCase):
         message_id = alice.send_message(bob_mailbox, b"Hello World")
 
         received = bob.retrieve_message(message_id).read()
-        self.assertEqual(received, 'Hello World')
+        self.assertEqual(received, b'Hello World')
 
-        assert_that(self.chunk_retry_call_counts[1], equal_to(0))
-        assert_that(self.chunk_retry_call_counts[2], equal_to(3))
-        assert_that(self.chunk_retry_call_counts[3], equal_to(0))
+        self.assertEqual(self.chunk_retry_call_counts[1], 0)
+        self.assertEqual(self.chunk_retry_call_counts[2], 3)
+        self.assertEqual(self.chunk_retry_call_counts[3], 0)
 
     @mock.patch('requests.post')
     def test_chunk_all_retries_fail(self, mock_post):
@@ -277,8 +274,8 @@ class MeshChunkRetryClientTest(TestCase):
 
         self.assertRaises(requests.exceptions.HTTPError, alice.send_message, bob_mailbox, b"Hello World")
 
-        assert_that(self.chunk_retry_call_counts[1], equal_to(0))
-        assert_that(self.chunk_retry_call_counts[2], equal_to(3))
+        self.assertEqual(self.chunk_retry_call_counts[1], 0)
+        self.assertEqual(self.chunk_retry_call_counts[2], 3)
 
     @mock.patch('requests.post')
     def test_chunk_retries_with_file(self, mock_post):
@@ -291,14 +288,14 @@ class MeshChunkRetryClientTest(TestCase):
         options = [chunk_options(2, 2)]
         self.mock_app.set_chunk_retry_options(options)
 
-        message_id = alice.send_message(bob_mailbox, open("test_chunk_retry_file"))
+        message_id = alice.send_message(bob_mailbox, open("test_chunk_retry_file", 'rb'))
 
         received = bob.retrieve_message(message_id).read()
-        self.assertEqual(received, 'test1 test2 test3')
+        self.assertEqual(received, b'test1 test2 test3')
 
-        assert_that(self.chunk_retry_call_counts[1], equal_to(0))
-        assert_that(self.chunk_retry_call_counts[2], equal_to(3))
-        assert_that(self.chunk_retry_call_counts[3], equal_to(0))
+        self.assertEqual(self.chunk_retry_call_counts[1], 0)
+        self.assertEqual(self.chunk_retry_call_counts[2], 3)
+        self.assertEqual(self.chunk_retry_call_counts[3], 0)
 
 
 if __name__ == "__main__":

@@ -1,16 +1,31 @@
 from __future__ import absolute_import, print_function
 from unittest import TestCase, main
+import mock
+import requests
 import signal
 import traceback
 import sys
+
+from collections import namedtuple
 from mesh_client import MeshClient, MeshError, default_ssl_opts
-from mesh_client.mock_server import MockMeshApplication
+from mesh_client.mock_server import MockMeshApplication, MockMeshChunkRetryApplication
 from six.moves.urllib.error import HTTPError
 
 alice_mailbox = 'alice'
 alice_password = 'password'
 bob_mailbox = 'bob'
 bob_password = 'password'
+
+unmocked_post = requests.post
+
+
+class MockResponse:
+    def __init__(self, json_data, status_code):
+        self.json_data = json_data
+        self.status_code = status_code
+
+    def json(self):
+        return self.json_data
 
 
 def print_stack_frames(signum=None, frame=None):
@@ -182,6 +197,105 @@ class MeshClientTest(TestCase):
         alice = self.alice
         with self.assertRaises(MeshError):
             alice.send_message(bob_mailbox, b"")
+
+
+class MeshChunkRetryClientTest(TestCase):
+    def run(self, result=None):
+        self.chunk_retry_call_counts = {}
+        try:
+            with  MockMeshChunkRetryApplication() as mock_app:
+                self.mock_app = mock_app
+                self.uri = mock_app.uri
+                self.alice = MeshClient(
+                    self.uri,
+                    alice_mailbox,
+                    alice_password,
+                    max_chunk_size=5,
+                    max_chunk_retries=3,
+                    **default_ssl_opts)
+                self.bob = MeshClient(
+                    self.uri,
+                    bob_mailbox,
+                    bob_password,
+                    max_chunk_size=5,
+                    max_chunk_retries=3,
+                    **default_ssl_opts)
+                super(MeshChunkRetryClientTest, self).run(result)
+        except HTTPError as e:
+            print(e.read())
+            print_stack_frames()
+            print("Message store", self.mock_app.messages)
+            raise
+        except:
+            print_stack_frames()
+            print("Message store", self.mock_app.messages)
+            raise
+
+    def wrapped_post(self, url, data, **kwargs):
+        current_chunk = int(kwargs['headers']['Mex-Chunk-Range'].split(':')[0])
+        if current_chunk not in self.chunk_retry_call_counts.keys():
+            self.chunk_retry_call_counts[current_chunk] = 0
+        else:
+            self.chunk_retry_call_counts[current_chunk] += 1
+
+        print('Current chunk call counts: {}'.format(self.chunk_retry_call_counts))
+        response = unmocked_post(url, data, **kwargs)
+        return response
+
+    @mock.patch('requests.post')
+    def test_chunk_retries(self, mock_post):
+        mock_post.side_effect = self.wrapped_post
+
+        alice = self.alice
+        bob = self.bob
+
+        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
+        options = [chunk_options(2, 2)]
+        self.mock_app.set_chunk_retry_options(options)
+
+        message_id = alice.send_message(bob_mailbox, b"Hello World")
+
+        received = bob.retrieve_message(message_id).read()
+        self.assertEqual(received, b'Hello World')
+
+        self.assertEqual(self.chunk_retry_call_counts[1], 0)
+        self.assertEqual(self.chunk_retry_call_counts[2], 3)
+        self.assertEqual(self.chunk_retry_call_counts[3], 0)
+
+    @mock.patch('requests.post')
+    def test_chunk_all_retries_fail(self, mock_post):
+        mock_post.side_effect = self.wrapped_post
+
+        alice = self.alice
+
+        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
+        options = [chunk_options(2, 3)]
+        self.mock_app.set_chunk_retry_options(options)
+
+        self.assertRaises(requests.exceptions.HTTPError, alice.send_message, bob_mailbox, b"Hello World")
+
+        self.assertEqual(self.chunk_retry_call_counts[1], 0)
+        self.assertEqual(self.chunk_retry_call_counts[2], 3)
+
+    @mock.patch('requests.post')
+    def test_chunk_retries_with_file(self, mock_post):
+        mock_post.side_effect = self.wrapped_post
+
+        alice = self.alice
+        bob = self.bob
+
+        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
+        options = [chunk_options(2, 2)]
+        self.mock_app.set_chunk_retry_options(options)
+
+        message_id = alice.send_message(bob_mailbox, open("test_chunk_retry_file", 'rb'))
+
+        received = bob.retrieve_message(message_id).read()
+        self.assertEqual(received, b'test1 test2 test3')
+
+        self.assertEqual(self.chunk_retry_call_counts[1], 0)
+        self.assertEqual(self.chunk_retry_call_counts[2], 3)
+        self.assertEqual(self.chunk_retry_call_counts[3], 0)
 
 
 if __name__ == "__main__":

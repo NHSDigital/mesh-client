@@ -6,6 +6,8 @@ import datetime
 import os.path
 import requests
 import six
+import time
+from io import BytesIO
 from itertools import chain
 from hashlib import sha256
 from .io_helpers import \
@@ -65,7 +67,8 @@ class MeshClient(object):
                  verify=None,
                  max_chunk_size=75 * 1024 * 1024,
                  proxies=None,
-                 transparent_compress=False):
+                 transparent_compress=False,
+                 max_chunk_retries=0):
         """
         Create a new MeshClient.
 
@@ -87,6 +90,7 @@ class MeshClient(object):
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
         self._proxies = proxies or {}
+        self.max_chunk_retries = max_chunk_retries
 
         token_generator = _AuthTokenGenerator(shared_key, mailbox, password)
 
@@ -224,6 +228,15 @@ class MeshClient(object):
         message_id = json_resp["messageID"]
 
         for i, chunk in enumerate(chunk_iterator):
+            data = maybe_compressed(chunk)
+
+            if self.max_chunk_retries > 0:
+                if hasattr(data, 'read'):
+                    data = data.read()
+                buf = BytesIO(data)
+            else:
+                buf = data
+
             chunk_num = i + 2
             headers = self._headers({
                 "Content-Type": "application/octet-stream",
@@ -233,15 +246,29 @@ class MeshClient(object):
             if transparent_compress:
                 headers["Mex-Content-Compress"] = "TRUE"
                 headers["Content-Encoding"] = "gzip"
-            response = requests.post(
-                "{}/messageexchange/{}/outbox/{}/{}".format(
-                    self._url, self._mailbox, message_id, chunk_num),
-                data=maybe_compressed(chunk),
-                headers=headers,
-                cert=self._cert,
-                verify=self._verify,
-                proxies=self._proxies)
-            response.raise_for_status()
+
+            response = None
+            for i in range(self.max_chunk_retries + 1):
+                if self.max_chunk_retries > 0:
+                    buf.seek(0)
+
+                # non-linear delay in terms of squares
+                time.sleep(i**2)
+
+                response = requests.post(
+                    "{}/messageexchange/{}/outbox/{}/{}".format(
+                        self._url, self._mailbox, message_id, chunk_num),
+                    data=buf,
+                    headers=headers,
+                    cert=self._cert,
+                    verify=self._verify,
+                    proxies=self._proxies)
+
+                # check other successful response codes
+                if response.status_code == 200 or response.status_code == 202:
+                    break
+            else:
+                response.raise_for_status()
 
         return message_id
 

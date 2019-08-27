@@ -43,7 +43,7 @@ _OPTIONAL_HEADERS = {
     "HTTP_MEX_COMPRESSED": "Mex-Compressed",
     "HTTP_MEX_CHUNK_RANGE": "Mex-Chunk-Range",
     "HTTP_MEX_FROM": "Mex-From",
-    "HTTP_MEX_TO": "Mex-To",
+    "HTTP_MEX_TO": "Mex-To"
 }
 
 
@@ -66,6 +66,11 @@ _server_error = _dumb_response_code(500, "Server Error")
 
 def _ok(content_type, data, start_response):
     start_response("200 OK", [("Content-Type", content_type)])
+    return data
+
+
+def _error(content_type, data, start_error_response):
+    start_error_response("500 INTERNAL SERVER ERROR", [("Content-Type", content_type)])
     return data
 
 
@@ -300,6 +305,27 @@ class MockMeshApplication:
         self.server.shutdown()
 
 
+class MockMeshChunkRetryApplication(MockMeshApplication, object):
+    def __init__(self):
+        self.allowed_retries = {}
+        super(MockMeshChunkRetryApplication, self).__init__()
+
+    def set_chunk_retry_options(self, options):
+        self.retry_options = options
+
+    def outbox(self, environ, start_response):
+        current_chunk = int(environ['HTTP_MEX_CHUNK_RANGE'].split(':')[0])
+        if current_chunk == 1:
+            self.allowed_retries = {p[0]: p[1] for p in self.retry_options}
+
+        if current_chunk in self.allowed_retries:
+            if self.allowed_retries[current_chunk] >= 0:
+                self.allowed_retries[current_chunk] -= 1
+                return _error("application/json", '', start_response)
+
+        return super(MockMeshChunkRetryApplication, self).outbox(environ, start_response)
+
+
 _data_dir = os.path.dirname(__file__)
 default_server_context = ssl.create_default_context(
     ssl.Purpose.CLIENT_AUTH, cafile=os.path.join(_data_dir, "ca.cert.pem"))
@@ -316,6 +342,7 @@ class SSLWSGIServer(WSGIServer, object):
     def get_request(self):
         (socket, addr) = super(SSLWSGIServer, self).get_request()
         return self.__context.wrap_socket(socket, server_side=True), addr
+
 
 if __name__ == "__main__":
     print("Serving on port 8000")

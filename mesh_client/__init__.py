@@ -34,13 +34,19 @@ _OPTIONAL_HEADERS = {
     "message_type": "Mex-MessageType",
     "process_id": "Mex-ProcessID",
     "subject": "Mex-Subject",
-    "encrypted": "Mex-Encrypted",
-    "compressed": "Mex-Compressed"
+    "encrypted": "Mex-Content-Encrypted",
+    "compressed": "Mex-Content-Compressed",
+    "checksum": "Mex-Content-Checksum"
 }
 
 _RECEIVE_HEADERS = {
     "sender": "Mex-From",
-    "recipient": "Mex-To"
+    "recipient": "Mex-To",
+    "message_id": "Mex-MessageID",
+    "version": "Mex-Version",
+    "partner_id": "Mex-PartnerID",
+    "recipient_smtp": "Mex-ToSMTP",
+    "sender_smtp": "Mex-FromSMTP",
 }
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
 
@@ -123,6 +129,31 @@ class MeshClient(object):
 
         return b'hello'
 
+    def count_messages(self):
+        """
+        Count all messages in user's inbox. Returns an integer
+        """
+        response = requests.get(
+            "{}/messageexchange/{}/count".format(self._url, self._mailbox),
+            headers=self._headers(),
+            cert=self._cert,
+            verify=self._verify,
+            proxies=self._proxies)
+        return response.json()["count"]
+
+    def get_tracking_info(self, tracking_id):
+        """
+        Gets tracking information from MESH about a message, by its local message id.
+        Returns a dictionary, in much the same format that MESH provides it.
+        """
+        response = requests.get(
+            "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, self._mailbox, tracking_id),
+            headers=self._headers(),
+            cert=self._cert,
+            verify=self._verify,
+            proxies=self._proxies)
+        return response.json()
+
     def list_messages(self):
         """
         List all messages in user's inbox. Returns a list of message_ids
@@ -180,6 +211,14 @@ class MeshClient(object):
         subject
         encrypted
         compressed
+        checksum
+        sender
+        recipient
+        message_id
+        version
+        partner_id
+        recipient_smtp
+        sender_smtp
 
         Note that compressed refers to *non-transparent* compression - the
         client will not attempt to compress or decompress data. Transparent
@@ -192,7 +231,9 @@ class MeshClient(object):
         )
         headers = self._headers({
             "Mex-From": self._mailbox,
-            "Mex-To": recipient
+            "Mex-To": recipient,
+            "Mex-MessageType": 'DATA',
+            "Mex-Version": '1.0'
         })
 
         for key, value in kwargs.items():

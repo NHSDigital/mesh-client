@@ -96,16 +96,13 @@ class MeshClient(object):
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
         self._proxies = proxies or {}
+        self._token_generator = _AuthTokenGenerator(shared_key, mailbox, password)
         self.max_chunk_retries = max_chunk_retries
 
-        token_generator = _AuthTokenGenerator(shared_key, mailbox, password)
-
-        def headers_factory(extra_headers=None):
-            headers = {"Authorization": token_generator(), "Accept-Encoding": "gzip"}
-            headers.update(extra_headers or {})
-            return headers
-
-        self._headers = headers_factory
+    def _headers(self, extra_headers=None):
+        headers = {"Authorization": self._token_generator(), "Accept-Encoding": "gzip"}
+        headers.update(extra_headers or {})
+        return headers
 
     def handshake(self):
         """

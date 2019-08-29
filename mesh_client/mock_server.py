@@ -37,14 +37,20 @@ _OPTIONAL_HEADERS = {
     "HTTP_MEX_LOCALID": "Mex-LocalID",
     "HTTP_MEX_MESSAGETYPE": "Mex-MessageType",
     "HTTP_MEX_PROCESSID": "Mex-ProcessID",
+    "HTTP_MEX_PROCESSLID": "Mex-ProcesslID",
     "HTTP_MEX_SUBJECT": "Mex-Subject",
-    "HTTP_MEX_ENCRYPTED": "Mex-Encrypted",
-    "HTTP_MEX_COMPRESS": "Mex-Compress",
+    "HTTP_MEX_CONTENT_ENCRYPTED": "Mex-Content-Encrypted",
+    "HTTP_MEX_CONTENT_COMPRESS": "Mex-Content-Compress",
+    "HTTP_MEX_CONTENT_CHECKSUM": "Mex-Content-Checksum",
     "HTTP_MEX_COMPRESSED": "Mex-Compressed",
+    "HTTP_MEX_CONTENT_COMPRESSED": "Mex-Content-Compressed",
     "HTTP_MEX_CHUNK_RANGE": "Mex-Chunk-Range",
     "HTTP_MEX_FROM": "Mex-From",
     "HTTP_MEX_TO": "Mex-To"
 }
+
+
+TIMESTAMP_FORMAT = '%Y%m%d%H%M%S%f'
 
 
 def _dumb_response_code(code, message):
@@ -153,9 +159,9 @@ class MockMeshApplication:
 
     @property
     def message_exchange(self):
-
         return self.authenticated(
-            _compose(inbox=self.inbox, outbox=self.outbox))
+            _compose(inbox=self.inbox, outbox=self.outbox, count=self.count))
+
 
     def inbox(self, environ, start_response):
         request_method = environ["REQUEST_METHOD"]
@@ -173,7 +179,9 @@ class MockMeshApplication:
                 if chunk_num:
                     return self.download_chunk(
                         message_id, chunk_num)(environ, start_response)
-                message = self.messages.get(mailbox, [])[message_id]
+                message = self.messages[message_id]
+                if message['headers']['Mex-To'] != mailbox:
+                    return _not_found(environ, start_response)
                 response_code = ("206 Partial Content"
                                  if "chunks" in message else "200 OK")
                 start_response(response_code, list(message["headers"].items()))
@@ -187,8 +195,26 @@ class MockMeshApplication:
         else:
             return _bad_request(environ, start_response)
 
+    def count(self, environ, start_response):
+        request_method = environ["REQUEST_METHOD"]
+        mailbox = environ["mesh.mailbox"]
+        if request_method == "GET":
+            result = {
+                "count": len(self.messages.get(mailbox, {})),
+                "internalID": "12345",
+                "allResultsIncluded": True,
+
+            }
+            return _ok("application/json",
+                       [json.dumps(result).encode("UTF-8")],
+                       start_response)
+        else:
+            return _bad_request(environ, start_response)
+
     def outbox(self, environ, start_response):
         chunk_msg = shift_path_info(environ)
+        if chunk_msg == 'tracking':
+            return self.tracking(environ, start_response)
         if chunk_msg:
             return self.upload_chunk(chunk_msg)(environ, start_response)
         try:
@@ -223,6 +249,7 @@ class MockMeshApplication:
                    for key, value in environ.items()
                    if key in _OPTIONAL_HEADERS}
         msg_id = self.make_message_id()
+        headers['Mex-MessageID'] = msg_id
         mailbox[msg_id] = {"headers": headers, "data": data}
         self.messages[msg_id] = mailbox[msg_id]
         return _ok("application/json",
@@ -259,6 +286,42 @@ class MockMeshApplication:
             return [chunk]
 
         return handle
+
+    def tracking(self, environ, start_response):
+        tracking_id = shift_path_info(environ)
+        if not tracking_id:
+            return _bad_request(environ, start_response)
+        for message in self.messages.values():
+            if message.get('headers', {}).get('Mex-LocalID') == tracking_id:
+                headers = message['headers']
+                recipient = headers['Mex-To']
+                message_id = headers['Mex-MessageID']
+                acked = message_id not in self.messages[recipient]
+                now = datetime.datetime.now().strftime(TIMESTAMP_FORMAT)
+                response = {
+                    "localId": tracking_id,
+                    "dtsId": message_id,
+                    "messageType": "DATA",
+                    "chunkCount": len(message['chunks']),
+                    "subject": headers.get('Mex-Subject'),
+                    "statusEvent": None,
+                    "version": "1.0",
+                    "downloadTimestamp": now,
+                    "statusDescription": None,
+                    "status": "Acknowledged" if acked else "Accepted",
+                    "workflowId": headers.get('Mex-WorkflowID'),
+                    "fileName": headers.get('Mex-FileName'),
+                    "uploadTimestamp": now,
+                    "recipient": headers['Mex-To'],
+                    "sender": headers['Mex-From'],
+                    "messageId": message_id,
+                    "fileSize": 0
+                }
+                return _ok('application/json',
+                           [json.dumps(response).encode('UTF-8')],
+                           start_response)
+        else:
+            return _not_found(environ, start_response)
 
     def make_message_id(self):
         """

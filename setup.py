@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-
+import setuptools
 from distutils.core import setup
 
 setup(
     name='Mesh Client',
-    version='0.8.1',
+    version='0.9.0',
     description='Client for NHS Digital \'s MESH messaging system',
     author='James Pickering',
-    author_email='james.pickering@xml-solutions.com',
+    author_email='james.pickering@airelogic.com',
     packages=['mesh_client'],
     package_data={'mesh_client': ['*.pem']},
     install_requires=[

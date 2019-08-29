@@ -82,6 +82,7 @@ class MeshClientTest(TestCase):
 
         message_id = alice.send_message(bob_mailbox, b"Hello Bob 1")
         self.assertEqual([message_id], bob.list_messages())
+        self.assertEqual(1, bob.count_messages())
         msg = bob.retrieve_message(message_id)
         self.assertEqual(msg.read(), b"Hello Bob 1")
         self.assertEqual(msg.sender, "alice")
@@ -193,6 +194,15 @@ class MeshClientTest(TestCase):
             self.assertTrue(msg.encrypted)
             self.assertTrue(msg.compressed)
 
+    def test_tracking(self):
+        alice = self.alice
+        bob = self.bob
+        tracking_id = 'Message1'
+        msg_id = alice.send_message(bob_mailbox, b'Hello World', local_id=tracking_id)
+        self.assertEqual(alice.get_tracking_info(tracking_id)['status'], 'Accepted')
+        bob.acknowledge_message(msg_id)
+        self.assertEqual(alice.get_tracking_info(tracking_id)['status'], 'Acknowledged')
+
     def test_error_handling(self):
         alice = self.alice
         with self.assertRaises(MeshError):
@@ -238,7 +248,6 @@ class MeshChunkRetryClientTest(TestCase):
         else:
             self.chunk_retry_call_counts[current_chunk] += 1
 
-        print('Current chunk call counts: {}'.format(self.chunk_retry_call_counts))
         response = unmocked_post(url, data, **kwargs)
         return response
 

@@ -136,6 +136,7 @@ class MeshClient(object):
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies)
+        response.raise_for_status()
         return response.json()["count"]
 
     def get_tracking_info(self, tracking_id):
@@ -149,6 +150,7 @@ class MeshClient(object):
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies)
+        response.raise_for_status()
         return response.json()
 
     def list_messages(self):
@@ -161,6 +163,7 @@ class MeshClient(object):
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies)
+        response.raise_for_status()
         return response.json()["messages"]
 
     def retrieve_message(self, message_id):
@@ -176,6 +179,7 @@ class MeshClient(object):
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies)
+        response.raise_for_status()
         return Message(message_id, response, self)
 
     def retrieve_message_chunk(self, message_id, chunk_num):
@@ -186,6 +190,7 @@ class MeshClient(object):
             cert=self._cert,
             verify=self._verify,
             proxies=self._proxies)
+        response.raise_for_status()
         return response
 
     def send_message(self,

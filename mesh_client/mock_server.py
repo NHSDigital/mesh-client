@@ -82,21 +82,7 @@ def _error(content_type, data, start_error_response):
 
 def _compose(**kwargs):
     def handle(environ, start_response):
-        path_component = shift_path_info(environ)
-        if not path_component:
-
-            # required auth headers
-            auth_headers = [
-                'HTTP_MEX_CLIENTVERSION',
-                'HTTP_MEX_JAVAVERSION',
-                'HTTP_MEX_OSARCHITECTURE',
-                'HTTP_MEX_OSNAME',
-                'HTTP_MEX_OSVERSION'
-            ]
-            for auth_header in auth_headers:
-                if auth_header not in environ:
-                    return _server_error(environ, start_response)
-            return _ok('text/plain', '', start_response)
+        path_component = shift_path_info(environ) or 'default'
         if path_component in kwargs:
             return kwargs[path_component](environ, start_response)
         else:
@@ -157,10 +143,29 @@ class MockMeshApplication:
 
         return handle
 
+    def handshake(self, environ, start_response):
+        auth_headers = [
+            'HTTP_MEX_CLIENTVERSION',
+            'HTTP_MEX_JAVAVERSION',
+            'HTTP_MEX_OSARCHITECTURE',
+            'HTTP_MEX_OSNAME',
+            'HTTP_MEX_OSVERSION'
+        ]
+        for auth_header in auth_headers:
+            if auth_header not in environ:
+                return _server_error(environ, start_response)
+        return _ok('text/plain', '', start_response)
+
     @property
     def message_exchange(self):
         return self.authenticated(
-            _compose(inbox=self.inbox, outbox=self.outbox, count=self.count))
+            _compose(
+                inbox=self.inbox,
+                outbox=self.outbox,
+                count=self.count,
+                default=self.handshake
+            )
+        )
 
 
     def inbox(self, environ, start_response):
@@ -407,8 +412,12 @@ class SSLWSGIServer(WSGIServer, object):
         return self.__context.wrap_socket(socket, server_side=True), addr
 
 
-if __name__ == "__main__":
+def main():
     print("Serving on port 8000")
     server = make_server(
         "", 8000, MockMeshApplication(), server_class=SSLWSGIServer)
     server.serve_forever(0.01)
+
+
+if __name__ == "__main__":
+    main()

@@ -4,6 +4,8 @@ import uuid
 import hmac
 import datetime
 import os.path
+import pkg_resources
+import platform
 import requests
 import six
 import time
@@ -49,6 +51,8 @@ _RECEIVE_HEADERS = {
     "sender_smtp": "Mex-FromSMTP",
 }
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
+
+VERSION = pkg_resources.get_distribution('mesh_client').version
 
 _utf8_reader = codecs.getreader("utf-8")
 
@@ -111,11 +115,11 @@ class MeshClient(object):
         response = requests.post(
             "{}/messageexchange/{}".format(self._url, self._mailbox),
             headers=self._headers({
-                "mex-ClientVersion": "mesh_client==0.6.0",
-                "mex-OSArchitecture": "x64",
-                "mex-OSName": "ubuntu",
-                "mex-OSVersion": "14.04",
-                "mex-JavaVersion": "NA"
+                "mex-ClientVersion": "mesh_client=={}".format(VERSION),
+                "mex-OSArchitecture": platform.processor(),
+                "mex-OSName": platform.system(),
+                "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
+                "mex-JavaVersion": "N/A"
             }),
             cert=self._cert,
             verify=self._verify,

@@ -1,11 +1,17 @@
 #!/usr/bin/env python
 import setuptools
 from distutils.core import setup
+from os.path import dirname, join
+
+with open(join(dirname(__file__), 'README.md')) as f:
+    long_description = f.read()
 
 setup(
     name='Mesh Client',
     version='0.9.2',
     description='Client for NHS Digital \'s MESH messaging system',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author='James Pickering',
     author_email='james.pickering@airelogic.com',
     packages=['mesh_client'],

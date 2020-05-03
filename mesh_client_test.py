@@ -1,4 +1,6 @@
 from __future__ import absolute_import, print_function
+
+import io
 from unittest import TestCase, main
 import mock
 import requests
@@ -7,7 +9,7 @@ import traceback
 import sys
 
 from collections import namedtuple
-from mesh_client import MeshClient, MeshError, default_ssl_opts
+from mesh_client import MeshClient, MeshError, default_ssl_opts, CombineStreams
 from mesh_client.mock_server import MockMeshApplication, MockMeshChunkRetryApplication
 from six.moves.urllib.error import HTTPError
 
@@ -85,6 +87,50 @@ class MeshClientTest(TestCase):
         self.assertEqual(1, bob.count_messages())
         msg = bob.retrieve_message(message_id)
         self.assertEqual(msg.read(), b"Hello Bob 1")
+        self.assertEqual(msg.sender, "alice")
+        self.assertEqual(msg.recipient, "bob")
+        msg.acknowledge()
+        self.assertEqual([], bob.list_messages())
+
+    def test_send_receive_combine_streams_part1_multiple_of_chunk_size(self):
+        alice = self.alice
+        bob = self.bob
+
+        part1_length = 10
+        part2_length = 23
+
+        stream = {
+            'Body': CombineStreams([io.BytesIO(b"H"*part1_length), io.BytesIO((b"W"*part2_length))]),
+            'ContentLength': part1_length + part2_length,
+        }
+
+        message_id = alice.send_message(bob_mailbox, stream)
+        self.assertEqual([message_id], bob.list_messages())
+        self.assertEqual(1, bob.count_messages())
+        msg = bob.retrieve_message(message_id)
+        self.assertEqual(msg.read(), b"H" * part1_length + b"W"*part2_length)
+        self.assertEqual(msg.sender, "alice")
+        self.assertEqual(msg.recipient, "bob")
+        msg.acknowledge()
+        self.assertEqual([], bob.list_messages())
+
+    def test_send_receive_combine_streams_part1_not_multiple_of_chunk_size(self):
+        alice = self.alice
+        bob = self.bob
+
+        part1_length = 4
+        part2_length = 20
+
+        stream = {
+            'Body': CombineStreams([io.BytesIO(b"H"*part1_length), io.BytesIO((b"W"*part2_length))]),
+            'ContentLength': part1_length + part2_length,
+        }
+
+        message_id = alice.send_message(bob_mailbox, stream)
+        self.assertEqual([message_id], bob.list_messages())
+        self.assertEqual(1, bob.count_messages())
+        msg = bob.retrieve_message(message_id)
+        self.assertEqual(msg.read(), b"H" * part1_length + b"W"*part2_length)
         self.assertEqual(msg.sender, "alice")
         self.assertEqual(msg.recipient, "bob")
         msg.acknowledge()

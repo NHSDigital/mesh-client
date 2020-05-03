@@ -206,6 +206,52 @@ class IOHelpersTest(TestCase):
         chunk2 = six.next(iterator)
         self.assertEqual(b"b" * (small_chunk - 1), chunk2.read(small_chunk))
 
+    def test_split_combine_stream_misaligned_with_chunk_size_1(self):
+        instance = SplitStream(dict(
+            Body=CombineStreams([io.BytesIO(b"1234"), io.BytesIO(b"567890123456789")]),
+            ContentLength=19
+        ), 5)
+        self.assertEqual(len(instance), 4)
+        iterator = iter(instance)
+        chunk1 = six.next(iterator)
+        self.assertEqual(b"12345", chunk1.read(5))
+        chunk2 = six.next(iterator)
+        self.assertEqual(b"67890", chunk2.read(5))
+        chunk3 = six.next(iterator)
+        self.assertEqual(b"12345", chunk3.read(5))
+        chunk4 = six.next(iterator)
+        self.assertEqual(b"6789", chunk4.read(5))
+
+    def test_split_combine_stream_misaligned_with_chunk_size_2(self):
+        instance = SplitStream(dict(
+            Body=CombineStreams([io.BytesIO(b"123456789"), io.BytesIO(b"012345678")]),
+            ContentLength=18
+        ), 5)
+        self.assertEqual(len(instance), 4)
+        iterator = iter(instance)
+        chunk1 = six.next(iterator)
+        self.assertEqual(b"12345", chunk1.read(5))
+        chunk2 = six.next(iterator)
+        self.assertEqual(b"67890", chunk2.read(5))
+        chunk3 = six.next(iterator)
+        self.assertEqual(b"12345", chunk3.read(5))
+        chunk4 = six.next(iterator)
+        self.assertEqual(b"678", chunk4.read(5))
+
+    def test_split_combine_stream_misaligned_with_chunk_size_3(self):
+        instance = SplitStream(dict(
+            Body=CombineStreams([io.BytesIO(b"123"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
+            ContentLength=12
+        ), 5)
+        self.assertEqual(len(instance), 3)
+        iterator = iter(instance)
+        chunk1 = six.next(iterator)
+        self.assertEqual(b"12345", chunk1.read(5))
+        chunk2 = six.next(iterator)
+        self.assertEqual(b"67890", chunk2.read(5))
+        chunk3 = six.next(iterator)
+        self.assertEqual(b"12", chunk3.read(5))
+
     def test_combine_streams(self):
         instance = CombineStreams(io.BytesIO(b"Hello") for i in range(20))
         result = b""

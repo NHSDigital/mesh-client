@@ -1,8 +1,9 @@
 from __future__ import division
 import io
 import os
-import zlib
 import six
+import warnings
+import zlib
 
 
 class IteratorMixin(object):
@@ -188,7 +189,11 @@ class SplitStream(CloseUnderlyingMixin):
 
     def __iter__(self):
         for i in range(len(self)):
-            self._underlying.read(self._remaining)
+            if self._remaining > 0:
+                warnings.warn(
+                    "moving to next chunk, despite unread content in buffer "
+                    "- existing chunk will become invalid")
+                self._underlying.read(self._remaining)
             self._remaining = min(self._chunk_size,
                                   self._length - i * self._chunk_size)
             yield _SplitChunk(self)
@@ -223,10 +228,13 @@ class CombineStreams(IteratorMixin):
         result = io.BytesIO()
         try:
             while True:
-                result.write(self._current_stream.read(n))
-                if n is None or result.tell() < n:
+                data_read = self._current_stream.read(n)
+                result.write(data_read)
+                if n is None or len(data_read) < n:
                     self._close_current_stream()
                     self._current_stream = six.next(self._streams)
+                    if n is not None:
+                        n -= len(data_read)
                 else:
                     return result.getvalue()
         except StopIteration:

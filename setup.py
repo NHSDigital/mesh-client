@@ -8,8 +8,9 @@ with open(join(dirname(__file__), 'README.md')) as f:
 
 setup(
     name='Mesh Client',
-    version='0.9.2',
+    version='0.9.3',
     description='Client for NHS Digital \'s MESH messaging system',
+    url='https://github.com/jamespic/mesh-client',
     long_description=long_description,
     long_description_content_type='text/markdown',
     author='James Pickering',

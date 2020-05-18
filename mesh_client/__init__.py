@@ -38,7 +38,8 @@ DEP_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-dep-ca-bundle.
 TRAIN_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-train-ca-bundle.pem")
 LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-live-root-ca.pem")
 OPENTEST_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-opt-ca-bundle.pem")
-DIGICERT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-digicert-root-ca.pem")
+DIGICERT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-digicert-ca-bundle.pem")
+
 
 _OPTIONAL_HEADERS = {
     "workflow_id": "Mex-WorkflowID",
@@ -77,7 +78,9 @@ NHS_DEP_ENDPOINT = Endpoint('https://msg.dep.spine2.ncrs.nhs.uk', DEP_CA_CERT, N
 NHS_TRAIN_ENDPOINT = Endpoint('https://msg.train.spine2.ncrs.nhs.uk', TRAIN_CA_CERT, None)
 NHS_LIVE_ENDPOINT = Endpoint('https://mesh-sync.national.ncrs.nhs.uk', LIVE_CA_CERT, None)
 NHS_OPENTEST_ENDPOINT = Endpoint('https://192.168.128.11', OPENTEST_CA_CERT, None)
-# NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh-sync.national.ncrs.nhs.uk', DIGICERT_CA_CERT, None)  # FIXME: This is the wrong hostname
+NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh.spineservices.nhs.uk', DIGICERT_CA_CERT, None)
+# Internet gateway int serves up an invalid certificate, so validation has to be disabled
+NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint('https://mesh.intspineservices.nhs.uk', False, None)
 
 
 class MeshError(Exception):

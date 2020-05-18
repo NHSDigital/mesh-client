@@ -9,7 +9,7 @@ import traceback
 import sys
 
 from collections import namedtuple
-from mesh_client import MeshClient, MeshError, default_ssl_opts, CombineStreams
+from mesh_client import MeshClient, MeshError, default_ssl_opts, CombineStreams, LOCAL_MOCK_ENDPOINT
 from mesh_client.mock_server import MockMeshApplication, MockMeshChunkRetryApplication
 from six.moves.urllib.error import HTTPError
 
@@ -253,6 +253,20 @@ class MeshClientTest(TestCase):
         alice = self.alice
         with self.assertRaises(MeshError):
             alice.send_message(bob_mailbox, b"")
+
+
+class EndpointTest(TestCase):
+    def test_handshake(self):
+        with MockMeshApplication() as mock_app:
+            endpoint = LOCAL_MOCK_ENDPOINT._replace(url=mock_app.uri)
+            client = MeshClient(
+                endpoint,
+                alice_mailbox,
+                alice_password,
+                max_chunk_size=5)
+
+            hand_shook = client.handshake()
+            self.assertEqual(hand_shook, b"hello")
 
 
 class MeshChunkRetryClientTest(TestCase):

@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import codecs
+import collections
 import uuid
 import hmac
 import datetime
@@ -15,12 +16,13 @@ from hashlib import sha256
 from .io_helpers import \
     CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
 
-_data_dir = os.path.dirname(__file__)
+MOCK_CA_CERT = pkg_resources.resource_filename('mesh_client', "ca.cert.pem")
+MOCK_CERT = pkg_resources.resource_filename('mesh_client', "client.cert.pem")
+MOCK_KEY = pkg_resources.resource_filename('mesh_client', "client.key.pem")
 
-default_ssl_opts = {
-    "verify": os.path.join(_data_dir, "ca.cert.pem"),
-    "cert": (os.path.join(_data_dir, 'client.cert.pem'),
-             os.path.join(_data_dir, 'client.key.pem'))
+MOCK_SSL_OPTS = {
+    "verify": MOCK_CA_CERT,
+    "cert": (MOCK_CERT, MOCK_KEY)
 }
 """
 Usable default values for verify and cert, providing certificates and keys
@@ -28,6 +30,15 @@ which should work with mock_server. Note that these certs will not work with
 any NHS Digital test environments - such certs must be obtained from
 NHS Digital.
 """
+default_ssl_opts = MOCK_SSL_OPTS
+
+INT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-int-ca-bundle.pem")
+DEV_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-dev-ca-bundle.pem")
+DEP_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-dep-ca-bundle.pem")
+TRAIN_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-train-ca-bundle.pem")
+LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-live-root-ca.pem")
+OPENTEST_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-opt-ca-bundle.pem")
+DIGICERT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-digicert-root-ca.pem")
 
 _OPTIONAL_HEADERS = {
     "workflow_id": "Mex-WorkflowID",
@@ -57,6 +68,18 @@ VERSION = pkg_resources.get_distribution('mesh_client').version
 _utf8_reader = codecs.getreader("utf-8")
 
 
+Endpoint = collections.namedtuple('Endpoint', ['url', 'verify', 'cert'])
+LOCAL_MOCK_ENDPOINT = Endpoint('https://localhost:8000', MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY))
+LOCAL_FAKE_ENDPOINT = Endpoint('https://localhost:8829', MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY))
+NHS_INT_ENDPOINT = Endpoint('https://msg.int.spine2.ncrs.nhs.uk', INT_CA_CERT, None)
+NHS_DEV_ENDPOINT = Endpoint('https://msg.dev.spine2.ncrs.nhs.uk', DEV_CA_CERT, None)
+NHS_DEP_ENDPOINT = Endpoint('https://msg.dep.spine2.ncrs.nhs.uk', DEP_CA_CERT, None)
+NHS_TRAIN_ENDPOINT = Endpoint('https://msg.train.spine2.ncrs.nhs.uk', TRAIN_CA_CERT, None)
+NHS_LIVE_ENDPOINT = Endpoint('https://mesh-sync.national.ncrs.nhs.uk', LIVE_CA_CERT, None)
+NHS_OPENTEST_ENDPOINT = Endpoint('https://192.168.128.11', OPENTEST_CA_CERT, None)
+# NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh-sync.national.ncrs.nhs.uk', DIGICERT_CA_CERT, None)  # FIXME: This is the wrong hostname
+
+
 class MeshError(Exception):
     pass
 
@@ -83,20 +106,47 @@ class MeshClient(object):
         Create a new MeshClient.
 
         At a minimum, you must provide an endpoint url, a mailbox and a
-        password. Since MESH uses mutual authentication, it is also highly
-        advisable to provide SSL information, in the form of cert and verify
+        password. The endpoint URL can either be a string, or a preconfigured
+        endpoint. Currently the following endpoints are preconfigured:
+
+        LOCAL_MOCK_ENDPOINT
+        LOCAL_FAKE_ENDPOINT
+        NHS_INT_ENDPOINT
+        NHS_LIVE_ENDPOINT
+        NHS_OPENTEST_ENDPOINT
+        NHS_INTERNET_ENDPOINT
+
+        Since MESH uses mutual authentication, it is also highly
+        advisable to provide SSL information, in the form of cert and verify.
         these take the same format as in the requests library, so you would
         typically provide a filename for a CA cert as verify, and a tuple
         containing two filenames (a client cert and a private key) for cert.
+
+        If you have chosen to use a preconfigured endpoint, then you a sane
+        default value will be used for the CA cert, so you should not have to
+        configure verify. For mock and fake endpoints, default values for cert
+        are provided, so you will not need to configure that either.
 
         You can also optionally specify the maximum file size before chunking,
         and whether messages should be compressed, transparently, before
         sending.
         """
-        self._url = url
+        if hasattr(url, 'url'):
+            self._url = url.url
+        else:
+            self._url = url
+
+        if hasattr(url, 'cert') and cert is None:
+            self._cert = url.cert
+        else:
+            self._cert = cert
+
+        if hasattr(url, 'verify') and verify is None:
+            self._verify = url.verify
+        else:
+            self._verify = verify
+
         self._mailbox = mailbox
-        self._cert = cert
-        self._verify = verify
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
         self._proxies = proxies or {}

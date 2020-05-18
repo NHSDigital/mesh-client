@@ -14,13 +14,12 @@ Example use
 -----------
 
 ```
-from mesh_client import MeshClient
+from mesh_client import MeshClient, NHS_DEP_ENDPOINT
 client = MeshClient(
-    'https://msg.dep.spine2.ncrs.nhs.uk',
+    NHS_DEP_ENDPOINT,
     'MYMAILBOX',
-    'Password123!'
-    cert=('/etc/certs/cert.pem', '/etc/certs/key.pem'),  # Mesh uses SSL, so you'll need some certs
-    verify='/etc/certs/mesh-ca-cert.pem')
+    'Password123!',
+    cert=('/etc/certs/cert.pem', '/etc/certs/key.pem'))  # Mesh uses SSL, so you'll need some certs
 
 client.handshake()  # It will work without this, but Spine will complain
 message_ids = client.list_messages()

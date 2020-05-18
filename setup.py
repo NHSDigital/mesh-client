@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-import setuptools
-from distutils.core import setup
+from setuptools import setup
 from os.path import dirname, join
 
 with open(join(dirname(__file__), 'README.md')) as f:
@@ -8,7 +7,7 @@ with open(join(dirname(__file__), 'README.md')) as f:
 
 setup(
     name='Mesh Client',
-    version='0.9.4',
+    version='0.10.0',
     description='Client for NHS Digital \'s MESH messaging system',
     url='https://github.com/NHSDigital/mesh-client',
     long_description=long_description,

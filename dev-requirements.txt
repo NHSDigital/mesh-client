@@ -1,0 +1,6 @@
+mock
+pip
+setuptools
+tox
+twine
+wheel

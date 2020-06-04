@@ -58,5 +58,12 @@ We use tox for testing on multiple versions. To run the tox tests, just run:
 tox
 ```
 
-For releases, we use twine. Please test your release on test.pypi.org before
-releasing.
+For releases, we use twine. The rough release process would be:
+
+```
+tox  # Re-run tests, just to be sure
+python setup.py sdist bdist_wheel
+twine upload --repository-url https://test.pypi.org/legacy/ dist/*0.10.1* # Or whichever version is being released
+# Check artifacts are uploaded correctly, and that entry on PyPI looks correct
+twine upload dist/*0.10.1* #
+```

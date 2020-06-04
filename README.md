@@ -35,3 +35,28 @@ for message in client.iterate_all_messages():
 
 client.send_message('RECIPIENT_MAILBOX', b'Hello World!', subject='Important message')
 ```
+
+Guidance for contributors
+-------------------------
+
+You should be doing all your development in a virtualenv / venv. You can install
+everything you need for development with
+
+```
+pip install -r dev-requirements.txt
+```
+
+We use unittest for tests, and you can run the test suite locally with:
+
+```
+python -m unittest discover . '*_test.py'
+```
+
+We use tox for testing on multiple versions. To run the tox tests, just run:
+
+```
+tox
+```
+
+For releases, we use twine. Please test your release on test.pypi.org before
+releasing.

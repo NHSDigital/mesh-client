@@ -62,8 +62,10 @@ For releases, we use twine. The rough release process would be:
 
 ```
 tox  # Re-run tests, just to be sure
+git tag $CURRENT_VERSION
+rm dist/*  # Get rid of previous distribution files
 python setup.py sdist bdist_wheel
-twine upload --repository-url https://test.pypi.org/legacy/ dist/*0.10.1* # Or whichever version is being released
+twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 # Check artifacts are uploaded correctly, and that entry on PyPI looks correct
-twine upload dist/*0.10.1* #
+twine upload dist/*
 ```

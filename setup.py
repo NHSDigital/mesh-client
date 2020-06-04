@@ -7,7 +7,6 @@ with open(join(dirname(__file__), 'README.md')) as f:
 
 setup(
     name='Mesh Client',
-    version='0.10.2',
     description='Client for NHS Digital \'s MESH messaging system',
     url='https://github.com/NHSDigital/mesh-client',
     long_description=long_description,
@@ -20,6 +19,8 @@ setup(
         'requests (>=2.9.0)',
         'six (>=1.10.0)'
     ],
+    use_scm_version=True,
+    setup_requires=['setuptools_scm'],
     entry_points={
         'console_scripts': [
             'mesh_auth=mesh_client.mesh_auth:main',

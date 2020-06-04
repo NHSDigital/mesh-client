@@ -154,7 +154,10 @@ class MockMeshApplication:
         for auth_header in auth_headers:
             if auth_header not in environ:
                 return _server_error(environ, start_response)
-        return _ok('text/plain', '', start_response)
+        mailbox_id = environ["mesh.mailbox"]
+        return _ok('application/json',
+                   [json.dumps({"mailboxId": mailbox_id}).encode("UTF-8")],
+                   start_response)
 
     @property
     def message_exchange(self):

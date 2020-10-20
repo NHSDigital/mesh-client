@@ -104,7 +104,8 @@ class MeshClient(object):
                  max_chunk_size=75 * 1024 * 1024,
                  proxies=None,
                  transparent_compress=False,
-                 max_chunk_retries=0):
+                 max_chunk_retries=0,
+                 timeout=10*60):
         """
         Create a new MeshClient.
 
@@ -154,7 +155,8 @@ class MeshClient(object):
         self._transparent_compress = transparent_compress
         self._proxies = proxies or {}
         self._token_generator = _AuthTokenGenerator(shared_key, mailbox, password)
-        self.max_chunk_retries = max_chunk_retries
+        self._max_chunk_retries = max_chunk_retries
+        self._timeout = timeout
 
     def _headers(self, extra_headers=None):
         headers = {"Authorization": self._token_generator(), "Accept-Encoding": "gzip"}
@@ -176,7 +178,8 @@ class MeshClient(object):
             }),
             cert=self._cert,
             verify=self._verify,
-            proxies=self._proxies
+            proxies=self._proxies,
+            timeout=self._timeout
         )
 
         response.raise_for_status()
@@ -192,7 +195,8 @@ class MeshClient(object):
             headers=self._headers(),
             cert=self._cert,
             verify=self._verify,
-            proxies=self._proxies)
+            proxies=self._proxies,
+            timeout=self._timeout)
         response.raise_for_status()
         return response.json()["count"]
 
@@ -206,7 +210,8 @@ class MeshClient(object):
             headers=self._headers(),
             cert=self._cert,
             verify=self._verify,
-            proxies=self._proxies)
+            proxies=self._proxies,
+            timeout=self._timeout)
         response.raise_for_status()
         return response.json()
 
@@ -219,7 +224,8 @@ class MeshClient(object):
             headers=self._headers(),
             cert=self._cert,
             verify=self._verify,
-            proxies=self._proxies)
+            proxies=self._proxies,
+            timeout=self._timeout)
         response.raise_for_status()
         return response.json()["messages"]
 
@@ -235,7 +241,8 @@ class MeshClient(object):
             stream=True,
             cert=self._cert,
             verify=self._verify,
-            proxies=self._proxies)
+            proxies=self._proxies,
+            timeout=self._timeout)
         response.raise_for_status()
         return Message(message_id, response, self)
 
@@ -246,7 +253,8 @@ class MeshClient(object):
             stream=True,
             cert=self._cert,
             verify=self._verify,
-            proxies=self._proxies)
+            proxies=self._proxies,
+            timeout=self._timeout)
         response.raise_for_status()
         return response
 
@@ -321,7 +329,8 @@ class MeshClient(object):
             headers=headers,
             cert=self._cert,
             verify=self._verify,
-            proxies=self._proxies)
+            proxies=self._proxies,
+            timeout=self._timeout)
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)
@@ -330,7 +339,7 @@ class MeshClient(object):
         for i, chunk in enumerate(chunk_iterator):
             data = maybe_compressed(chunk)
 
-            if self.max_chunk_retries > 0:
+            if self._max_chunk_retries > 0:
                 if hasattr(data, 'read'):
                     data = data.read()
                 buf = BytesIO(data)
@@ -348,8 +357,8 @@ class MeshClient(object):
                 headers["Content-Encoding"] = "gzip"
 
             response = None
-            for i in range(self.max_chunk_retries + 1):
-                if self.max_chunk_retries > 0:
+            for i in range(self._max_chunk_retries + 1):
+                if self._max_chunk_retries > 0:
                     buf.seek(0)
 
                 # non-linear delay in terms of squares
@@ -362,7 +371,8 @@ class MeshClient(object):
                     headers=headers,
                     cert=self._cert,
                     verify=self._verify,
-                    proxies=self._proxies)
+                    proxies=self._proxies,
+                    timeout=self._timeout)
 
                 # check other successful response codes
                 if response.status_code == 200 or response.status_code == 202:
@@ -383,7 +393,8 @@ class MeshClient(object):
             headers=self._headers(),
             cert=self._cert,
             verify=self._verify,
-            proxies=self._proxies)
+            proxies=self._proxies,
+            timeout=self._timeout)
         response.raise_for_status()
 
     def iterate_all_messages(self):

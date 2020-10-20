@@ -15,12 +15,13 @@ package as default_ssl_opts. Since these certs and keys are publicly available,
 they should only be used in test environments.
 """
 from __future__ import print_function
+import datetime
 import hmac
 import json
-import datetime
-import ssl
-import traceback
 import os.path
+import ssl
+import time
+import traceback
 import zlib
 from contextlib import closing
 from hashlib import sha256
@@ -395,6 +396,12 @@ class MockMeshChunkRetryApplication(MockMeshApplication, object):
                 return _error("application/json", '', start_response)
 
         return super(MockMeshChunkRetryApplication, self).outbox(environ, start_response)
+
+
+class SlowMockMeshApplication(MockMeshApplication):
+    def __call__(self, environ, start_response):
+        time.sleep(2.0)
+        return super(SlowMockMeshApplication, self).__call__(environ, start_response)
 
 
 _data_dir = os.path.dirname(__file__)

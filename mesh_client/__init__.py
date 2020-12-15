@@ -374,6 +374,9 @@ class MeshClient(object):
     def close(self):
         self._session.close()
 
+    def __del__(self):
+        self._session.close()
+
     def __enter__(self):
         return self
 

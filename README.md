@@ -15,25 +15,26 @@ Example use
 
 ```
 from mesh_client import MeshClient, NHS_DEP_ENDPOINT
-client = MeshClient(
-    NHS_DEP_ENDPOINT,
-    'MYMAILBOX',
-    'Password123!',
-    cert=('/etc/certs/cert.pem', '/etc/certs/key.pem'))  # Mesh uses SSL, so you'll need some certs
+with MeshClient(
+          NHS_DEP_ENDPOINT,
+          'MYMAILBOX',
+          'Password123!',
+          cert=('/etc/certs/cert.pem', '/etc/certs/key.pem')  # Mesh uses SSL, so you'll need some certs
+        ) as client:
 
-client.handshake()  # It will work without this, but Spine will complain
-message_ids = client.list_messages()
-first_message = client.retrieve_message(message_ids[0])
-print('Subject', first_message.subject)
-print('Message', first_message.read())
-first_message.acknowledge()
+    client.handshake()  # It will work without this, but Spine will complain
+    message_ids = client.list_messages()
+    first_message = client.retrieve_message(message_ids[0])
+    print('Subject', first_message.subject)
+    print('Message', first_message.read())
+    first_message.acknowledge()
 
-# Alternatively, iterate
-for message in client.iterate_all_messages():
-    with message: # With block will handle acknowledgement
-        print('Message', message.read())
+    # Alternatively, iterate
+    for message in client.iterate_all_messages():
+        with message: # With block will handle acknowledgement
+            print('Message', message.read())
 
-client.send_message('RECIPIENT_MAILBOX', b'Hello World!', subject='Important message')
+    client.send_message('RECIPIENT_MAILBOX', b'Hello World!', subject='Important message')
 ```
 
 Guidance for contributors

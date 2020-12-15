@@ -47,19 +47,20 @@ class MeshClientTest(TestCase):
             with MockMeshApplication() as mock_app:
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
-                self.alice = MeshClient(
-                    self.uri,
-                    alice_mailbox,
-                    alice_password,
-                    max_chunk_size=5,
-                    **default_ssl_opts)
-                self.bob = MeshClient(
-                    self.uri,
-                    bob_mailbox,
-                    bob_password,
-                    max_chunk_size=5,
-                    **default_ssl_opts)
-                super(MeshClientTest, self).run(result)
+                with MeshClient(
+                        self.uri,
+                        alice_mailbox,
+                        alice_password,
+                        max_chunk_size=5,
+                        **default_ssl_opts) as alice:
+                    self.alice = alice
+                    self.bob = MeshClient(
+                        self.uri,
+                        bob_mailbox,
+                        bob_password,
+                        max_chunk_size=5,
+                        **default_ssl_opts)
+                    super(MeshClientTest, self).run(result)
         except HTTPError as e:
             print(e.read())
             print_stack_frames()

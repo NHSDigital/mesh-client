@@ -372,10 +372,12 @@ class MeshClient(object):
             yield self.retrieve_message(msg_id)
 
     def close(self):
-        self._session.close()
+        if self._session is not None:
+            self._session.close()
+            self._session = None
 
     def __del__(self):
-        self._session.close()
+        self.close()
 
     def __enter__(self):
         return self

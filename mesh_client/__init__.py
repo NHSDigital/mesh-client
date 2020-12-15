@@ -65,9 +65,8 @@ _RECEIVE_HEADERS = {
 }
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
 
-VERSION = pkg_resources.get_distribution('mesh_client').version
 
-_utf8_reader = codecs.getreader("utf-8")
+VERSION = pkg_resources.get_distribution('mesh_client').version
 
 
 Endpoint = collections.namedtuple('Endpoint', ['url', 'verify', 'cert'])
@@ -136,50 +135,44 @@ class MeshClient(object):
         and whether messages should be compressed, transparently, before
         sending.
         """
+        self._session = requests.Session()
+        self._session.headers = {
+            "mex-ClientVersion": "mesh_client=={}".format(VERSION),
+            "mex-OSArchitecture": platform.processor(),
+            "mex-OSName": platform.system(),
+            "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
+            "mex-JavaVersion": "N/A",
+            "Accept-Encoding": "gzip"
+        }
+        self._session.auth = AuthTokenGenerator(shared_key, mailbox, password)
         if hasattr(url, 'url'):
             self._url = url.url
         else:
             self._url = url
 
         if hasattr(url, 'cert') and cert is None:
-            self._cert = url.cert
+            self._session.cert = url.cert
         else:
-            self._cert = cert
+            self._session.cert = cert
 
         if hasattr(url, 'verify') and verify is None:
-            self._verify = url.verify
+            self._session.verify = url.verify
         else:
-            self._verify = verify
+            self._session.verify = verify
 
+        self._session.proxies = proxies or {}
         self._mailbox = mailbox
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
-        self._proxies = proxies or {}
-        self._token_generator = _AuthTokenGenerator(shared_key, mailbox, password)
         self._max_chunk_retries = max_chunk_retries
         self._timeout = timeout
-
-    def _headers(self, extra_headers=None):
-        headers = {"Authorization": self._token_generator(), "Accept-Encoding": "gzip"}
-        headers.update(extra_headers or {})
-        return headers
 
     def handshake(self):
         """
         List all messages in user's inbox. Returns a list of message_ids
         """
-        response = requests.post(
+        response = self._session.post(
             "{}/messageexchange/{}".format(self._url, self._mailbox),
-            headers=self._headers({
-                "mex-ClientVersion": "mesh_client=={}".format(VERSION),
-                "mex-OSArchitecture": platform.processor(),
-                "mex-OSName": platform.system(),
-                "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
-                "mex-JavaVersion": "N/A"
-            }),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies,
             timeout=self._timeout
         )
 
@@ -191,12 +184,8 @@ class MeshClient(object):
         """
         Count all messages in user's inbox. Returns an integer
         """
-        response = requests.get(
+        response = self._session.get(
             "{}/messageexchange/{}/count".format(self._url, self._mailbox),
-            headers=self._headers(),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies,
             timeout=self._timeout)
         response.raise_for_status()
         return response.json()["count"]
@@ -206,12 +195,8 @@ class MeshClient(object):
         Gets tracking information from MESH about a message, by its local message id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
-        response = requests.get(
+        response = self._session.get(
             "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, self._mailbox, tracking_id),
-            headers=self._headers(),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies,
             timeout=self._timeout)
         response.raise_for_status()
         return response.json()
@@ -220,12 +205,8 @@ class MeshClient(object):
         """
         List all messages in user's inbox. Returns a list of message_ids
         """
-        response = requests.get(
+        response = self._session.get(
             "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
-            headers=self._headers(),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies,
             timeout=self._timeout)
         response.raise_for_status()
         return response.json()["messages"]
@@ -236,25 +217,17 @@ class MeshClient(object):
         object
         """
         message_id = getattr(message_id, "_msg_id", message_id)
-        response = requests.get(
+        response = self._session.get(
             "{}/messageexchange/{}/inbox/{}".format(self._url, self._mailbox, message_id),
-            headers=self._headers(),
             stream=True,
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies,
             timeout=self._timeout)
         response.raise_for_status()
         return Message(message_id, response, self)
 
     def retrieve_message_chunk(self, message_id, chunk_num):
-        response = requests.get(
+        response = self._session.get(
             "{}/messageexchange/{}/inbox/{}/{}".format(self._url, self._mailbox, message_id, chunk_num),
-            headers=self._headers(),
             stream=True,
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies,
             timeout=self._timeout)
         response.raise_for_status()
         return response
@@ -297,12 +270,12 @@ class MeshClient(object):
             lambda stream: GzipCompressStream(
                 stream) if transparent_compress else stream
         )
-        headers = self._headers({
+        headers = {
             "Mex-From": self._mailbox,
             "Mex-To": recipient,
             "Mex-MessageType": 'DATA',
             "Mex-Version": '1.0'
-        })
+        }
 
         for key, value in kwargs.items():
             if key in _OPTIONAL_HEADERS:
@@ -324,13 +297,10 @@ class MeshClient(object):
         chunk_iterator = iter(chunks)
 
         chunk1 = maybe_compressed(six.next(chunk_iterator))
-        response1 = requests.post(
+        response1 = self._session.post(
             "{}/messageexchange/{}/outbox".format(self._url, self._mailbox),
             data=chunk1,
             headers=headers,
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies,
             timeout=self._timeout)
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
@@ -348,11 +318,11 @@ class MeshClient(object):
                 buf = data
 
             chunk_num = i + 2
-            headers = self._headers({
+            headers = {
                 "Content-Type": "application/octet-stream",
                 "Mex-Chunk-Range": "{}:{}".format(chunk_num, len(chunks)),
                 "Mex-From": self._mailbox,
-            })
+            }
             if transparent_compress:
                 headers["Mex-Content-Compress"] = "TRUE"
                 headers["Content-Encoding"] = "gzip"
@@ -365,14 +335,11 @@ class MeshClient(object):
                 # non-linear delay in terms of squares
                 time.sleep(i**2)
 
-                response = requests.post(
+                response = self._session.post(
                     "{}/messageexchange/{}/outbox/{}/{}".format(
                         self._url, self._mailbox, message_id, chunk_num),
                     data=buf,
                     headers=headers,
-                    cert=self._cert,
-                    verify=self._verify,
-                    proxies=self._proxies,
                     timeout=self._timeout)
 
                 # check other successful response codes
@@ -388,13 +355,9 @@ class MeshClient(object):
         Acknowledge a message_id, deleting it from MESH.
         """
         message_id = getattr(message_id, "_msg_id", message_id)
-        response = requests.put(
+        response = self._session.put(
             "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(
                 self._url, self._mailbox, message_id),
-            headers=self._headers(),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies,
             timeout=self._timeout)
         response.raise_for_status()
 
@@ -407,6 +370,15 @@ class MeshClient(object):
         """
         for msg_id in self.list_messages():
             yield self.retrieve_message(msg_id)
+
+    def close(self):
+        self._session.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type_, value, tb):
+        self.close()
 
 
 class Message(object):
@@ -544,7 +516,7 @@ class Message(object):
         return iter(self._response)
 
 
-class _AuthTokenGenerator(object):
+class AuthTokenGenerator(object):
 
     def __init__(self, key, mailbox, password):
         self._key = key
@@ -553,7 +525,17 @@ class _AuthTokenGenerator(object):
         self._nonce = uuid.uuid4()
         self._nonce_count = 0
 
-    def __call__(self):
+    def __call__(self, r=None):
+        token = self.generate_token()
+        if r is not None:
+            # This is being used as a Requests auth handler
+            r.headers['Authorization'] = token
+            return r
+        else:
+            # This is being used in its legacy capacity
+            return token
+
+    def generate_token(self):
         now = datetime.datetime.now().strftime("%Y%m%d%H%M")
         public_auth_data = _combine(self._mailbox, self._nonce,
                                     self._nonce_count, now)
@@ -563,6 +545,10 @@ class _AuthTokenGenerator(object):
                            sha256).hexdigest()
         self._nonce_count += 1
         return "NHSMESH {public_auth_data}:{myhash}".format(**locals())
+
+
+# Preserve old name, even though it's part of the API now
+_AuthTokenGenerator = AuthTokenGenerator
 
 
 def _combine(*elements):

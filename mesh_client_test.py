@@ -18,8 +18,6 @@ alice_password = 'password'
 bob_mailbox = 'bob'
 bob_password = 'password'
 
-unmocked_post = requests.post
-
 
 class MockResponse:
     def __init__(self, json_data, status_code):
@@ -286,7 +284,6 @@ class TimeoutTest(TestCase):
 
 class MeshChunkRetryClientTest(TestCase):
     def run(self, result=None):
-        self.chunk_retry_call_counts = {}
         try:
             with  MockMeshChunkRetryApplication() as mock_app:
                 self.mock_app = mock_app
@@ -316,22 +313,22 @@ class MeshChunkRetryClientTest(TestCase):
             print("Message store", self.mock_app.messages)
             raise
 
-    def wrapped_post(self, url, data, **kwargs):
-        current_chunk = int(kwargs['headers']['Mex-Chunk-Range'].split(':')[0])
-        if current_chunk not in self.chunk_retry_call_counts.keys():
-            self.chunk_retry_call_counts[current_chunk] = 0
-        else:
-            self.chunk_retry_call_counts[current_chunk] += 1
+    def _count_chunk_retry_call_counts(self, mocked_post):
+        counts = {}
+        for call in mocked_post.call_args_list:
+            chunk = int(call.kwargs['headers']['Mex-Chunk-Range'].split(':')[0])
+            if chunk not in counts.keys():
+                counts[chunk] = 0
+            else:
+                counts[chunk] += 1
+        return counts
 
-        response = unmocked_post(url, data, **kwargs)
-        return response
 
-    @mock.patch('requests.post')
-    def test_chunk_retries(self, mock_post):
-        mock_post.side_effect = self.wrapped_post
-
+    def test_chunk_retries(self):
         alice = self.alice
         bob = self.bob
+        mock_post = mock.Mock(wraps=alice._session.post)
+        alice._session.post = mock_post
 
         chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
         options = [chunk_options(2, 2)]
@@ -342,15 +339,15 @@ class MeshChunkRetryClientTest(TestCase):
         received = bob.retrieve_message(message_id).read()
         self.assertEqual(received, b'Hello World')
 
-        self.assertEqual(self.chunk_retry_call_counts[1], 0)
-        self.assertEqual(self.chunk_retry_call_counts[2], 3)
-        self.assertEqual(self.chunk_retry_call_counts[3], 0)
+        chunk_retry_call_counts = self._count_chunk_retry_call_counts(mock_post)
+        self.assertEqual(chunk_retry_call_counts[1], 0)
+        self.assertEqual(chunk_retry_call_counts[2], 3)
+        self.assertEqual(chunk_retry_call_counts[3], 0)
 
-    @mock.patch('requests.post')
-    def test_chunk_all_retries_fail(self, mock_post):
-        mock_post.side_effect = self.wrapped_post
-
+    def test_chunk_all_retries_fail(self):
         alice = self.alice
+        mock_post = mock.Mock(wraps=alice._session.post)
+        alice._session.post = mock_post
 
         chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
         options = [chunk_options(2, 3)]
@@ -358,15 +355,15 @@ class MeshChunkRetryClientTest(TestCase):
 
         self.assertRaises(requests.exceptions.HTTPError, alice.send_message, bob_mailbox, b"Hello World")
 
-        self.assertEqual(self.chunk_retry_call_counts[1], 0)
-        self.assertEqual(self.chunk_retry_call_counts[2], 3)
+        chunk_retry_call_counts = self._count_chunk_retry_call_counts(mock_post)
+        self.assertEqual(chunk_retry_call_counts[1], 0)
+        self.assertEqual(chunk_retry_call_counts[2], 3)
 
-    @mock.patch('requests.post')
-    def test_chunk_retries_with_file(self, mock_post):
-        mock_post.side_effect = self.wrapped_post
-
+    def test_chunk_retries_with_file(self):
         alice = self.alice
         bob = self.bob
+        mock_post = mock.Mock(wraps=alice._session.post)
+        alice._session.post = mock_post
 
         chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
         options = [chunk_options(2, 2)]
@@ -377,9 +374,10 @@ class MeshChunkRetryClientTest(TestCase):
         received = bob.retrieve_message(message_id).read()
         self.assertEqual(received, b'test1 test2 test3')
 
-        self.assertEqual(self.chunk_retry_call_counts[1], 0)
-        self.assertEqual(self.chunk_retry_call_counts[2], 3)
-        self.assertEqual(self.chunk_retry_call_counts[3], 0)
+        chunk_retry_call_counts = self._count_chunk_retry_call_counts(mock_post)
+        self.assertEqual(chunk_retry_call_counts[1], 0)
+        self.assertEqual(chunk_retry_call_counts[2], 3)
+        self.assertEqual(chunk_retry_call_counts[3], 0)
 
 
 if __name__ == "__main__":

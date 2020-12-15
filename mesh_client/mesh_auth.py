@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-from mesh_client import _AuthTokenGenerator
+from mesh_client import AuthTokenGenerator
 from mesh_client.key_helper import get_shared_key_from_environ
 from argparse import ArgumentParser
 
@@ -13,8 +13,8 @@ def main():
                         help="The shared key to use for MESH authentication",
                         default=get_shared_key_from_environ())
     args = parser.parse_args()
-    generator = _AuthTokenGenerator(args.shared_key, args.user, args.password)
-    print(generator())
+    generator = AuthTokenGenerator(args.shared_key, args.user, args.password)
+    print(generator.generate_token())
 
 
 if __name__ == '__main__':

@@ -15,6 +15,7 @@ from itertools import chain
 from hashlib import sha256
 from .io_helpers import \
     CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
+from .key_helper import get_shared_key_from_environ
 
 MOCK_CA_CERT = pkg_resources.resource_filename('mesh_client', "ca.cert.pem")
 MOCK_CERT = pkg_resources.resource_filename('mesh_client', "client.cert.pem")
@@ -98,7 +99,7 @@ class MeshClient(object):
                  url,
                  mailbox,
                  password,
-                 shared_key=b"BackBone",
+                 shared_key=get_shared_key_from_environ(),
                  cert=None,
                  verify=None,
                  max_chunk_size=75 * 1024 * 1024,

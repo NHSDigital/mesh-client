@@ -14,7 +14,7 @@ also included, and the settings to use them are included in the mesh_client
 package as default_ssl_opts. Since these certs and keys are publicly available,
 they should only be used in test environments.
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import datetime
 import hmac
 import json
@@ -30,6 +30,7 @@ from threading import Thread
 from wsgiref.util import shift_path_info
 from wsgiref.simple_server import make_server, WSGIServer
 from .io_helpers import stream_from_wsgi_environ
+from .key_helper import get_shared_key_from_environ
 
 _OPTIONAL_HEADERS = {
     "HTTP_CONTENT_ENCODING": "Content-Encoding",
@@ -112,7 +113,7 @@ class MockMeshApplication:
     different message id formats.
     """
 
-    def __init__(self, shared_key=b"BackBone"):
+    def __init__(self, shared_key=get_shared_key_from_environ()):
         self.messages = {}
         self._shared_key = shared_key
         self._msg_count = 0

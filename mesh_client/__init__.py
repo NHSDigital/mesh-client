@@ -10,6 +10,7 @@ import platform
 import requests
 import six
 import time
+import warnings
 from io import BytesIO
 from itertools import chain
 from hashlib import sha256
@@ -166,6 +167,7 @@ class MeshClient(object):
         self._transparent_compress = transparent_compress
         self._max_chunk_retries = max_chunk_retries
         self._timeout = timeout
+        self._close_called = False
 
     def handshake(self):
         """
@@ -383,12 +385,20 @@ class MeshClient(object):
             yield self.retrieve_message(msg_id)
 
     def close(self):
-        if self._session is not None:
-            self._session.close()
-            self._session = None
+        self._close_called = True
+        self._session.close()
 
     def __del__(self):
-        self.close()
+        if not self._close_called:
+            warnings.warn(
+                "The API of MeshClient changed in mesh_client 1.0. Each"
+                " MeshClient instance must now be closed when the instance is"
+                " no longer needed. This can be achieved by using the close"
+                " method, or by using MeshClient in a with block. The"
+                " connection pool will be closed for you by the destructor"
+                " on this occasion, but you should not rely on this."
+            )
+            self.close()
 
     def __enter__(self):
         return self

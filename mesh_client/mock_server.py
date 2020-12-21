@@ -19,6 +19,7 @@ import datetime
 import hmac
 import json
 import os.path
+import random
 import ssl
 import time
 import traceback
@@ -120,7 +121,12 @@ class MockMeshApplication:
 
     @property
     def __call__(self):
-        return _compose(messageexchange=self.message_exchange)
+        return _compose(
+            messageexchange=self.message_exchange,
+            endpointlookup=_compose(
+                mesh=self.endpoint_lookup
+            )
+        )
 
     def authenticated(self, handler):
         def handle(environ, start_response):
@@ -332,6 +338,27 @@ class MockMeshApplication:
                            start_response)
         else:
             return _not_found(environ, start_response)
+
+    def endpoint_lookup(self, environ, start_response):
+        org_code = shift_path_info(environ)
+        workflow_id = shift_path_info(environ)
+        if not org_code or not workflow_id:
+            return _not_found(environ, start_response)
+        result = {
+            "query_id": "{ts:%Y%m%d%H%M%S%f}_{rnd:06x}_{ts:%s}".format(
+                ts=datetime.datetime.now(),
+                rnd=random.randint(0, 0xffffff)),
+            "results": [
+                {
+                    "address": "{}HC001".format(org_code),
+                    "description": "{} {} endpoint".format(org_code, workflow_id),
+                    "endpoint_type": "MESH"
+                }
+            ]
+        }
+        return _ok('application/json',
+                   [json.dumps(result).encode('UTF-8')],
+                   start_response)
 
     def make_message_id(self):
         """

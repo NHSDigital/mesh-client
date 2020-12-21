@@ -201,6 +201,17 @@ class MeshClient(object):
         response.raise_for_status()
         return response.json()
 
+    def lookup_endpoint(self, organisation_code, workflow_id):
+        """
+        Lookup a mailbox by organisation code and workflow id.
+        Returns a dictionary, in much the same format that MESH provides it.
+        """
+        response = self._session.get(
+            "{}/endpointlookup/mesh/{}/{}".format(self._url, organisation_code, workflow_id),
+            timeout=self._timeout)
+        response.raise_for_status()
+        return response.json()
+
     def list_messages(self):
         """
         List all messages in user's inbox. Returns a list of message_ids

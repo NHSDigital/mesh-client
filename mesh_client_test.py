@@ -248,6 +248,15 @@ class MeshClientTest(TestCase):
         bob.acknowledge_message(msg_id)
         self.assertEqual(alice.get_tracking_info(tracking_id)['status'], 'Acknowledged')
 
+    def test_endpoint_lookup(self):
+        result = self.alice.lookup_endpoint('ORG1', 'WF1')
+        result_list = result['results']
+        self.assertEqual(len(result_list), 1)
+        self.assertEqual(result_list[0]['address'], 'ORG1HC001')
+        self.assertEqual(result_list[0]['description'], 'ORG1 WF1 endpoint')
+        self.assertEqual(result_list[0]['endpoint_type'], 'MESH')
+
+
     def test_error_handling(self):
         alice = self.alice
         with self.assertRaises(MeshError):

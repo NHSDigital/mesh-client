@@ -41,6 +41,7 @@ TRAIN_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-train-ca-bun
 LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-live-root-ca.pem")
 OPENTEST_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-opt-ca-bundle.pem")
 DIGICERT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-digicert-ca-bundle.pem")
+IG_INT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-ig-int-ca-bundle.pem")
 
 
 _OPTIONAL_HEADERS = {
@@ -80,8 +81,7 @@ NHS_TRAIN_ENDPOINT = Endpoint('https://msg.train.spine2.ncrs.nhs.uk', TRAIN_CA_C
 NHS_LIVE_ENDPOINT = Endpoint('https://mesh-sync.national.ncrs.nhs.uk', LIVE_CA_CERT, None)
 NHS_OPENTEST_ENDPOINT = Endpoint('https://192.168.128.11', OPENTEST_CA_CERT, None)
 NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh.spineservices.nhs.uk', DIGICERT_CA_CERT, None)
-# Internet gateway int serves up an invalid certificate, so validation has to be disabled
-NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint('https://mesh.intspineservices.nhs.uk', False, None)
+NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint('https://msg.intspineservices.nhs.uk', IG_INT_CA_CERT, None)
 
 
 class MeshError(Exception):

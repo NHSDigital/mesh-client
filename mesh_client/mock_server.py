@@ -50,6 +50,7 @@ _OPTIONAL_HEADERS = {
 }
 
 
+MOCK_SHARED_KEY = b"SHARED_KEY"
 TIMESTAMP_FORMAT = '%Y%m%d%H%M%S%f'
 
 
@@ -418,7 +419,7 @@ class SSLWSGIServer(WSGIServer, object):
 def main():
     print("Serving on port 8000")
     server = make_server(
-        "", 8000, MockMeshApplication(), server_class=SSLWSGIServer)
+        "", 8000, MockMeshApplication(MOCK_SHARED_KEY), server_class=SSLWSGIServer)
     server.serve_forever(0.01)
 
 

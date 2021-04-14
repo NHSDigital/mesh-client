@@ -30,6 +30,7 @@ from collections import OrderedDict
 from threading import Thread
 from wsgiref.util import shift_path_info
 from wsgiref.simple_server import make_server, WSGIServer
+from six.moves.urllib.parse import parse_qs
 from .io_helpers import stream_from_wsgi_environ
 from .key_helper import get_shared_key_from_environ
 
@@ -305,39 +306,51 @@ class MockMeshApplication:
 
     def tracking(self, environ, start_response):
         tracking_id = shift_path_info(environ)
-        if not tracking_id:
+        msg_id = parse_qs(environ['QUERY_STRING']).get('messageId', [None])[0]
+        if tracking_id:
+            message = self._find_message_by_local_id(tracking_id)
+        elif msg_id:
+            message = self.messages.get(msg_id)
+        else:
             return _bad_request(environ, start_response)
-        for message in self.messages.values():
-            if message.get('headers', {}).get('Mex-LocalID') == tracking_id:
-                headers = message['headers']
-                recipient = headers['Mex-To']
-                message_id = headers['Mex-MessageID']
-                acked = message_id not in self.messages[recipient]
-                now = datetime.datetime.now().strftime(TIMESTAMP_FORMAT)
-                response = {
-                    "localId": tracking_id,
-                    "dtsId": message_id,
-                    "messageType": "DATA",
-                    "chunkCount": len(message['chunks']),
-                    "subject": headers.get('Mex-Subject'),
-                    "statusEvent": None,
-                    "version": "1.0",
-                    "downloadTimestamp": now,
-                    "statusDescription": None,
-                    "status": "Acknowledged" if acked else "Accepted",
-                    "workflowId": headers.get('Mex-WorkflowID'),
-                    "fileName": headers.get('Mex-FileName'),
-                    "uploadTimestamp": now,
-                    "recipient": headers['Mex-To'],
-                    "sender": headers['Mex-From'],
-                    "messageId": message_id,
-                    "fileSize": 0
-                }
-                return _ok('application/json',
-                           [json.dumps(response).encode('UTF-8')],
-                           start_response)
+
+        if message:
+            headers = message['headers']
+            recipient = headers['Mex-To']
+            message_id = headers['Mex-MessageID']
+            acked = message_id not in self.messages[recipient]
+            now = datetime.datetime.now().strftime(TIMESTAMP_FORMAT)
+            response = {
+                "localId": tracking_id,
+                "dtsId": message_id,
+                "messageType": "DATA",
+                "chunkCount": len(message['chunks']),
+                "subject": headers.get('Mex-Subject'),
+                "statusEvent": None,
+                "version": "1.0",
+                "downloadTimestamp": now,
+                "statusDescription": None,
+                "status": "Acknowledged" if acked else "Accepted",
+                "workflowId": headers.get('Mex-WorkflowID'),
+                "fileName": headers.get('Mex-FileName'),
+                "uploadTimestamp": now,
+                "recipient": headers['Mex-To'],
+                "sender": headers['Mex-From'],
+                "messageId": message_id,
+                "fileSize": 0
+            }
+            return _ok('application/json',
+                       [json.dumps(response).encode('UTF-8')],
+                       start_response)
         else:
             return _not_found(environ, start_response)
+
+    def _find_message_by_local_id(self, local_id):
+        for message in self.messages.values():
+            if message.get('headers', {}).get('Mex-LocalID') == local_id:
+                return message
+        else:
+            return None
 
     def endpoint_lookup(self, environ, start_response):
         org_code = shift_path_info(environ)

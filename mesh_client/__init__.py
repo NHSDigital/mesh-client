@@ -192,14 +192,20 @@ class MeshClient(object):
         response.raise_for_status()
         return response.json()["count"]
 
-    def get_tracking_info(self, tracking_id):
+    def get_tracking_info(self, tracking_id=None, message_id=None):
         """
         Gets tracking information from MESH about a message, by its local message id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
-        response = self._session.get(
-            "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, self._mailbox, tracking_id),
-            timeout=self._timeout)
+        if (tracking_id is not None) + (message_id is not None) != 1:
+            raise ValueError("Exactly one of local message id (called tracking_id, for historical reasons) and message_id must be provided")
+
+        if tracking_id:
+            url = "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, self._mailbox, tracking_id)
+        else:
+            url = "{}/messageexchange/{}/outbox/tracking?messageId={}".format(self._url, self._mailbox, message_id)
+
+        response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
         return response.json()
 

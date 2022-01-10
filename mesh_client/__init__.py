@@ -139,7 +139,7 @@ class MeshClient(object):
         self._session = requests.Session()
         self._session.headers = {
             "mex-ClientVersion": "mesh_client=={}".format(VERSION),
-            "mex-OSArchitecture": platform.processor(),
+            "mex-OSArchitecture": platform.processor() or platform.machine(),
             "mex-OSName": platform.system(),
             "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
             "mex-JavaVersion": "N/A",

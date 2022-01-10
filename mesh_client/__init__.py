@@ -321,6 +321,9 @@ class MeshClient(object):
             data=chunk1,
             headers=headers,
             timeout=self._timeout)
+        # MESH server dumps XML SOAP output on internal server error
+        if response1.status_code >= 500:
+            response1.raise_for_status()
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)

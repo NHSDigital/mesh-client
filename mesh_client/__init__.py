@@ -309,7 +309,7 @@ class MeshClient(object):
                                     ] + list(_OPTIONAL_HEADERS.keys()))))
 
         if transparent_compress:
-            headers["Mex-Content-Compress"] = "TRUE"
+            headers["Mex-Content-Compress"] = "Y"
             headers["Content-Encoding"] = "gzip"
 
         chunks = SplitStream(data, self._max_chunk_size)
@@ -347,7 +347,7 @@ class MeshClient(object):
                 "Mex-From": self._mailbox,
             }
             if transparent_compress:
-                headers["Mex-Content-Compress"] = "TRUE"
+                headers["Mex-Content-Compress"] = "Y"
                 headers["Content-Encoding"] = "gzip"
 
             response = None
@@ -464,8 +464,8 @@ class Message(object):
         for key, value in _RECEIVE_HEADERS.items():
             header_value = headers.get(value, None)
             if key in ["compressed", "encrypted"]:
-                header_value = header_value or "FALSE"
-                header_value = header_value.upper() == "TRUE"
+                header_value = header_value or "N"
+                header_value = header_value.upper() == "Y"
             setattr(self, key, header_value)
         chunk, chunk_count = map(
             int, headers.get("Mex-Chunk-Range", "1:1").split(":"))

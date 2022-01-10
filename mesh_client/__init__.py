@@ -293,7 +293,8 @@ class MeshClient(object):
             "Mex-From": self._mailbox,
             "Mex-To": recipient,
             "Mex-MessageType": 'DATA',
-            "Mex-Version": '1.0'
+            "Mex-Version": '1.0',
+            "Content-Type": "application/octet-stream",
         }
 
         for key, value in kwargs.items():

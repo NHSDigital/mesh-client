@@ -203,7 +203,7 @@ class MeshClient(object):
         if tracking_id:
             url = "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, self._mailbox, tracking_id)
         else:
-            url = "{}/messageexchange/{}/outbox/tracking?messageId={}".format(self._url, self._mailbox, message_id)
+            url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, self._mailbox, message_id)
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()

@@ -11,6 +11,7 @@ import requests
 import six
 import time
 import warnings
+from six.moves.urllib.parse import quote as q
 from io import BytesIO
 from itertools import chain
 from hashlib import sha256
@@ -176,7 +177,7 @@ class MeshClient(object):
         List all messages in user's inbox. Returns a list of message_ids
         """
         response = self._session.post(
-            "{}/messageexchange/{}".format(self._url, self._mailbox),
+            "{}/messageexchange/{}".format(self._url, q(self._mailbox)),
             timeout=self._timeout
         )
 
@@ -189,7 +190,7 @@ class MeshClient(object):
         Count all messages in user's inbox. Returns an integer
         """
         response = self._session.get(
-            "{}/messageexchange/{}/count".format(self._url, self._mailbox),
+            "{}/messageexchange/{}/count".format(self._url, q(self._mailbox)),
             timeout=self._timeout)
         response.raise_for_status()
         return response.json()["count"]
@@ -203,9 +204,9 @@ class MeshClient(object):
             raise ValueError("Exactly one of local message id (called tracking_id, for historical reasons) and message_id must be provided")
 
         if tracking_id:
-            url = "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, self._mailbox, tracking_id)
+            url = "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, q(self._mailbox), q(tracking_id))
         else:
-            url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, self._mailbox, message_id)
+            url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, q(self._mailbox), q(message_id))
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
@@ -217,7 +218,7 @@ class MeshClient(object):
         Returns a dictionary, in much the same format that MESH provides it.
         """
         response = self._session.get(
-            "{}/endpointlookup/mesh/{}/{}".format(self._url, organisation_code, workflow_id),
+            "{}/endpointlookup/mesh/{}/{}".format(self._url, q(organisation_code), q(workflow_id)),
             timeout=self._timeout)
         response.raise_for_status()
         return response.json()
@@ -227,7 +228,7 @@ class MeshClient(object):
         List all messages in user's inbox. Returns a list of message_ids
         """
         response = self._session.get(
-            "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
+            "{}/messageexchange/{}/inbox".format(self._url, q(self._mailbox)),
             timeout=self._timeout)
         response.raise_for_status()
         return response.json()["messages"]
@@ -239,7 +240,7 @@ class MeshClient(object):
         """
         message_id = getattr(message_id, "_msg_id", message_id)
         response = self._session.get(
-            "{}/messageexchange/{}/inbox/{}".format(self._url, self._mailbox, message_id),
+            "{}/messageexchange/{}/inbox/{}".format(self._url, q(self._mailbox), q(message_id)),
             stream=True,
             timeout=self._timeout)
         response.raise_for_status()
@@ -247,7 +248,7 @@ class MeshClient(object):
 
     def retrieve_message_chunk(self, message_id, chunk_num):
         response = self._session.get(
-            "{}/messageexchange/{}/inbox/{}/{}".format(self._url, self._mailbox, message_id, chunk_num),
+            "{}/messageexchange/{}/inbox/{}/{}".format(self._url, q(self._mailbox), q(message_id), chunk_num),
             stream=True,
             timeout=self._timeout)
         response.raise_for_status()
@@ -322,7 +323,7 @@ class MeshClient(object):
 
         chunk1 = maybe_compressed(six.next(chunk_iterator))
         response1 = self._session.post(
-            "{}/messageexchange/{}/outbox".format(self._url, self._mailbox),
+            "{}/messageexchange/{}/outbox".format(self._url, q(self._mailbox)),
             data=chunk1,
             headers=headers,
             timeout=self._timeout)
@@ -364,7 +365,7 @@ class MeshClient(object):
 
                 response = self._session.post(
                     "{}/messageexchange/{}/outbox/{}/{}".format(
-                        self._url, self._mailbox, message_id, chunk_num),
+                        self._url, q(self._mailbox), q(message_id), chunk_num),
                     data=buf,
                     headers=headers,
                     timeout=self._timeout)
@@ -384,7 +385,7 @@ class MeshClient(object):
         message_id = getattr(message_id, "_msg_id", message_id)
         response = self._session.put(
             "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(
-                self._url, self._mailbox, message_id),
+                self._url, q(self._mailbox), q(message_id)),
             timeout=self._timeout)
         response.raise_for_status()
 

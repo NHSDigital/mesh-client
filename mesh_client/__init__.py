@@ -139,7 +139,7 @@ class MeshClient(object):
         self._session = requests.Session()
         self._session.headers = {
             "mex-ClientVersion": "mesh_client=={}".format(VERSION),
-            "mex-OSArchitecture": platform.processor(),
+            "mex-OSArchitecture": platform.processor() or platform.machine(),
             "mex-OSName": platform.system(),
             "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
             "mex-JavaVersion": "N/A",
@@ -203,7 +203,7 @@ class MeshClient(object):
         if tracking_id:
             url = "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, self._mailbox, tracking_id)
         else:
-            url = "{}/messageexchange/{}/outbox/tracking?messageId={}".format(self._url, self._mailbox, message_id)
+            url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, self._mailbox, message_id)
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
@@ -293,7 +293,8 @@ class MeshClient(object):
             "Mex-From": self._mailbox,
             "Mex-To": recipient,
             "Mex-MessageType": 'DATA',
-            "Mex-Version": '1.0'
+            "Mex-Version": '1.0',
+            "Content-Type": "application/octet-stream",
         }
 
         for key, value in kwargs.items():
@@ -308,7 +309,7 @@ class MeshClient(object):
                                     ] + list(_OPTIONAL_HEADERS.keys()))))
 
         if transparent_compress:
-            headers["Mex-Content-Compress"] = "TRUE"
+            headers["Mex-Content-Compress"] = "Y"
             headers["Content-Encoding"] = "gzip"
 
         chunks = SplitStream(data, self._max_chunk_size)
@@ -321,6 +322,9 @@ class MeshClient(object):
             data=chunk1,
             headers=headers,
             timeout=self._timeout)
+        # MESH server dumps XML SOAP output on internal server error
+        if response1.status_code >= 500:
+            response1.raise_for_status()
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)
@@ -343,7 +347,7 @@ class MeshClient(object):
                 "Mex-From": self._mailbox,
             }
             if transparent_compress:
-                headers["Mex-Content-Compress"] = "TRUE"
+                headers["Mex-Content-Compress"] = "Y"
                 headers["Content-Encoding"] = "gzip"
 
             response = None
@@ -460,8 +464,8 @@ class Message(object):
         for key, value in _RECEIVE_HEADERS.items():
             header_value = headers.get(value, None)
             if key in ["compressed", "encrypted"]:
-                header_value = header_value or "FALSE"
-                header_value = header_value.upper() == "TRUE"
+                header_value = header_value or "N"
+                header_value = header_value.upper() == "Y"
             setattr(self, key, header_value)
         chunk, chunk_count = map(
             int, headers.get("Mex-Chunk-Range", "1:1").split(":"))

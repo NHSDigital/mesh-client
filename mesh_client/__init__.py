@@ -465,7 +465,7 @@ class Message(object):
             header_value = headers.get(value, None)
             if key in ["compressed", "encrypted"]:
                 header_value = header_value or "N"
-                header_value = header_value.upper() == "Y"
+                header_value = header_value.upper() in ["Y", "FALSE"]
             setattr(self, key, header_value)
         chunk, chunk_count = map(
             int, headers.get("Mex-Chunk-Range", "1:1").split(":"))

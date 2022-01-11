@@ -306,7 +306,7 @@ class MockMeshApplication:
 
     def tracking(self, environ, start_response):
         tracking_id = shift_path_info(environ)
-        msg_id = parse_qs(environ['QUERY_STRING']).get('messageId', [None])[0]
+        msg_id = parse_qs(environ['QUERY_STRING']).get('messageID', [None])[0]
         if tracking_id:
             message = self._find_message_by_local_id(tracking_id)
         elif msg_id:

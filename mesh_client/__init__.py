@@ -56,6 +56,8 @@ _OPTIONAL_HEADERS = {
     "checksum": "Mex-Content-Checksum"
 }
 
+_BOOLEAN_HEADERS = {"compressed", "encrypted"}
+
 _RECEIVE_HEADERS = {
     "sender": "Mex-From",
     "recipient": "Mex-To",
@@ -299,6 +301,8 @@ class MeshClient(object):
 
         for key, value in kwargs.items():
             if key in _OPTIONAL_HEADERS:
+                if key in _BOOLEAN_HEADERS:
+                    value = 'Y' if value else 'N'
                 headers[_OPTIONAL_HEADERS[key]] = str(value)
             else:
                 raise TypeError("Unrecognised keyword argument {key}."
@@ -463,9 +467,9 @@ class Message(object):
 
         for key, value in _RECEIVE_HEADERS.items():
             header_value = headers.get(value, None)
-            if key in ["compressed", "encrypted"]:
+            if key in _BOOLEAN_HEADERS:
                 header_value = header_value or "N"
-                header_value = header_value.upper() in ["Y", "FALSE"]
+                header_value = header_value.upper() in ["Y", "TRUE"]
             setattr(self, key, header_value)
         chunk, chunk_count = map(
             int, headers.get("Mex-Chunk-Range", "1:1").split(":"))

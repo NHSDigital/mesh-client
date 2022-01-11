@@ -572,7 +572,7 @@ class AuthTokenGenerator(object):
             return token
 
     def generate_token(self):
-        now = datetime.datetime.now().strftime("%Y%m%d%H%M")
+        now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M")
         public_auth_data = _combine(self._mailbox, self._nonce,
                                     self._nonce_count, now)
         private_auth_data = _combine(self._mailbox, self._nonce,

@@ -43,6 +43,7 @@ LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-live-root-ca.
 OPENTEST_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-opt-ca-bundle.pem")
 DIGICERT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-digicert-ca-bundle.pem")
 IG_INT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-ig-int-ca-bundle.pem")
+IG_LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-ig-live-ca-bundle.pem")
 
 
 _OPTIONAL_HEADERS = {
@@ -83,7 +84,7 @@ NHS_DEP_ENDPOINT = Endpoint('https://msg.dep.spine2.ncrs.nhs.uk', DEP_CA_CERT, N
 NHS_TRAIN_ENDPOINT = Endpoint('https://msg.train.spine2.ncrs.nhs.uk', TRAIN_CA_CERT, None)
 NHS_LIVE_ENDPOINT = Endpoint('https://mesh-sync.national.ncrs.nhs.uk', LIVE_CA_CERT, None)
 NHS_OPENTEST_ENDPOINT = Endpoint('https://192.168.128.11', OPENTEST_CA_CERT, None)
-NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh.spineservices.nhs.uk', DIGICERT_CA_CERT, None)
+NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh-sync.spineservices.nhs.uk', IG_LIVE_CA_CERT, None)
 NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint('https://msg.intspineservices.nhs.uk', IG_INT_CA_CERT, None)
 
 
@@ -122,7 +123,8 @@ class MeshClient(object):
         NHS_INT_ENDPOINT
         NHS_LIVE_ENDPOINT
         NHS_OPENTEST_ENDPOINT
-        NHS_INTERNET_ENDPOINT
+        NHS_INTERNET_GATEWAY_INT_ENDPOINT
+        NHS_INTERNET_GATEWAY_ENDPOINT
 
         Since MESH uses mutual authentication, it is also highly
         advisable to provide SSL information, in the form of cert and verify.

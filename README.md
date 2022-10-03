@@ -6,14 +6,14 @@ A Python client for [NHS Digital's MESH API](https://meshapi.docs.apiary.io/).
 Installation
 ------------
 
-```
+```bash
 pip install mesh_client
 ```
 
 Example use
 -----------
 
-```
+```python
 from mesh_client import MeshClient, NHS_DEP_ENDPOINT
 with MeshClient(
           NHS_DEP_ENDPOINT,
@@ -43,25 +43,32 @@ Guidance for contributors
 You should be doing all your development in a virtualenv / venv. You can install
 everything you need for development with
 
-```
+```bash
+virtualenv .venv
+source .venv/bin/activate
 pip install -r dev-requirements.txt
+pip install -e .
+
+# if using asdf
+pip install tox-asdf
+
 ```
 
 We use unittest for tests, and you can run the test suite locally with:
 
-```
+```bash
 python -m unittest discover . '*_test.py'
 ```
 
 We use tox for testing on multiple versions. To run the tox tests, just run:
 
-```
+```bash
 tox
 ```
 
 For releases, we use twine. The rough release process would be:
 
-```
+```bash
 tox  # Re-run tests, just to be sure
 git tag $CURRENT_VERSION
 rm dist/*  # Get rid of previous distribution files

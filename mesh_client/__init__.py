@@ -1,20 +1,21 @@
 from __future__ import absolute_import
-import codecs
 import collections
-import uuid
-import hmac
+import warnings
+import functools
 import datetime
-import os.path
+import hmac
 import pkg_resources
 import platform
 import requests
 import six
 import time
-import warnings
-from six.moves.urllib.parse import quote as q
+import uuid
+from hashlib import sha256
 from io import BytesIO
 from itertools import chain
-from hashlib import sha256
+from six.moves.urllib.parse import quote as q
+
+
 from .io_helpers import \
     CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
 from .key_helper import get_shared_key_from_environ
@@ -88,6 +89,24 @@ NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh-sync.spineservices.nhs.uk
 NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint('https://msg.intspineservices.nhs.uk', IG_INT_CA_CERT, None)
 
 
+def deprecated(reason=None):
+    """This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emitted
+    when the function is used."""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def new_func(*args, **kwargs):
+            msg_extra = (reason or "").strip()
+            if msg_extra:
+                msg_extra = " " + msg_extra
+            message = "Call to deprecated function {}.".format(func.__name__, msg_extra)
+            warnings.warn(message, category=DeprecationWarning, stacklevel=2)
+            return func(*args, **kwargs)
+        return new_func
+    return decorator
+
+
 class MeshError(Exception):
     pass
 
@@ -141,13 +160,18 @@ class MeshClient(object):
         and whether messages should be compressed, transparently, before
         sending.
         """
+
         self._session = requests.Session()
         self._session.headers = {
-            "mex-ClientVersion": "mesh_client=={}".format(VERSION),
-            "mex-OSArchitecture": platform.processor() or platform.machine(),
-            "mex-OSName": platform.system(),
-            "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
-            "mex-JavaVersion": "N/A",
+            "User-Agent": (
+                "mesh_client;{};N/A;{};{};{} {}".format(
+                    VERSION,
+                    platform.processor() or platform.machine(),
+                    platform.system(),
+                    platform.release(),
+                    platform.version()
+                )
+            ),
             "Accept-Encoding": "gzip"
         }
         self._session.auth = AuthTokenGenerator(shared_key, mailbox, password)
@@ -178,8 +202,15 @@ class MeshClient(object):
         """
         List all messages in user's inbox. Returns a list of message_ids
         """
+        headers = {
+            "mex-ClientVersion": "mesh_client=={}".format(VERSION),
+            "mex-OSArchitecture": platform.processor() or platform.machine(),
+            "mex-OSName": platform.system(),
+            "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
+            "mex-JavaVersion": "N/A"
+        }
         response = self._session.post(
-            "{}/messageexchange/{}".format(self._url, q(self._mailbox)),
+            "{}/messageexchange/{}".format(self._url, q(self._mailbox)), headers=headers,
             timeout=self._timeout
         )
 
@@ -187,6 +218,7 @@ class MeshClient(object):
 
         return b'hello'
 
+    @deprecated("this api endpoint is marked as deprecated")
     def count_messages(self):
         """
         Count all messages in user's inbox. Returns an integer
@@ -197,6 +229,18 @@ class MeshClient(object):
         response.raise_for_status()
         return response.json()["count"]
 
+    def track_by_message_id(self, message_id=None):
+        """
+        Gets tracking information from MESH about a message, by its  message id.
+        Returns a dictionary, in much the same format that MESH provides it.
+        """
+        url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, q(self._mailbox), q(message_id))
+
+        response = self._session.get(url, timeout=self._timeout)
+        response.raise_for_status()
+        return response.json()
+
+    @deprecated(reason="tracking by local_id is deprecated, please use 'track_by_message_id'")
     def get_tracking_info(self, tracking_id=None, message_id=None):
         """
         Gets tracking information from MESH about a message, by its local message id.

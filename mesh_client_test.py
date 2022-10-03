@@ -256,6 +256,14 @@ class MeshClientTest(TestCase):
         bob.acknowledge_message(msg_id)
         self.assertEqual(alice.get_tracking_info(message_id=msg_id)['status'], 'Acknowledged')
 
+    def test_by_message_id_tracking(self):
+        alice = self.alice
+        bob = self.bob
+        msg_id = alice.send_message(bob_mailbox, b'Hello World')
+        self.assertEqual(alice.track_by_message_id(message_id=msg_id)['status'], 'Accepted')
+        bob.acknowledge_message(msg_id)
+        self.assertEqual(alice.track_by_message_id(message_id=msg_id)['status'], 'Acknowledged')
+
     def test_endpoint_lookup(self):
         result = self.alice.lookup_endpoint('ORG1', 'WF1')
         result_list = result['results']

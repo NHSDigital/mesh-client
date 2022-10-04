@@ -6,7 +6,7 @@ from requests import HTTPError
 class EndpointConnectivityTest(TestCase):
     @skip("This test needs N3 connectivity, talks to real endpoints, and is Python 3 only, so don't run it by default")
     def test_connectivity(self):
-        for key, endpoint in list(mesh_client.__dict__.items()):
+        for key, endpoint in mesh_client.__dict__.items():
             if key.endswith('_ENDPOINT') and not key.startswith('LOCAL_') and not '_OPENTEST_' in key:
                 with self.subTest(key):
                     print("Testing", key)

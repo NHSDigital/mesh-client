@@ -10,7 +10,7 @@ import sys
 
 from collections import namedtuple
 from mesh_client import MeshClient, MeshError, default_ssl_opts, CombineStreams, LOCAL_MOCK_ENDPOINT
-from mesh_client.mock_server import MockMeshApplication, MockMeshChunkRetryApplication
+from mesh_client.mock_server import MockMeshApplication, MockMeshChunkRetryApplication, SlowMockMeshApplication
 from six.moves.urllib.error import HTTPError
 
 alice_mailbox = 'alice'
@@ -51,21 +51,22 @@ class MeshClientTest(TestCase):
             with MockMeshApplication(shared_key) as mock_app:
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
-                self.alice = MeshClient(
-                    self.uri,
-                    alice_mailbox,
-                    alice_password,
-                    shared_key,
-                    max_chunk_size=5,
-                    **default_ssl_opts)
-                self.bob = MeshClient(
-                    self.uri,
-                    bob_mailbox,
-                    bob_password,
-                    shared_key,
-                    max_chunk_size=5,
-                    **default_ssl_opts)
-                super(MeshClientTest, self).run(result)
+                with MeshClient(
+                        self.uri,
+                        alice_mailbox,
+                        alice_password,
+                        shared_key,
+                        max_chunk_size=5,
+                        **default_ssl_opts) as alice:
+                    self.alice = alice
+                    self.bob = MeshClient(
+                        self.uri,
+                        bob_mailbox,
+                        bob_password,
+                        shared_key,
+                        max_chunk_size=5,
+                        **default_ssl_opts)
+                    super(MeshClientTest, self).run(result)
         except HTTPError as e:
             print(e.read())
             print_stack_frames()
@@ -253,6 +254,31 @@ class MeshClientTest(TestCase):
         bob.acknowledge_message(msg_id)
         self.assertEqual(alice.get_tracking_info(tracking_id)['status'], 'Acknowledged')
 
+    def test_msg_id_tracking(self):
+        alice = self.alice
+        bob = self.bob
+        msg_id = alice.send_message(bob_mailbox, b'Hello World')
+        self.assertEqual(alice.get_tracking_info(message_id=msg_id)['status'], 'Accepted')
+        bob.acknowledge_message(msg_id)
+        self.assertEqual(alice.get_tracking_info(message_id=msg_id)['status'], 'Acknowledged')
+
+    def test_by_message_id_tracking(self):
+        alice = self.alice
+        bob = self.bob
+        msg_id = alice.send_message(bob_mailbox, b'Hello World')
+        self.assertEqual(alice.track_by_message_id(message_id=msg_id)['status'], 'Accepted')
+        bob.acknowledge_message(msg_id)
+        self.assertEqual(alice.track_by_message_id(message_id=msg_id)['status'], 'Acknowledged')
+
+    def test_endpoint_lookup(self):
+        result = self.alice.lookup_endpoint('ORG1', 'WF1')
+        result_list = result['results']
+        self.assertEqual(len(result_list), 1)
+        self.assertEqual(result_list[0]['address'], 'ORG1HC001')
+        self.assertEqual(result_list[0]['description'], 'ORG1 WF1 endpoint')
+        self.assertEqual(result_list[0]['endpoint_type'], 'MESH')
+
+
     def test_error_handling(self):
         alice = self.alice
         with self.assertRaises(MeshError):
@@ -274,9 +300,23 @@ class EndpointTest(TestCase):
             self.assertEqual(hand_shook, b"hello")
 
 
+class TimeoutTest(TestCase):
+    def test_timeout(self):
+        with SlowMockMeshApplication() as mock_app:
+            endpoint = LOCAL_MOCK_ENDPOINT._replace(url=mock_app.uri)
+            client = MeshClient(
+                endpoint,
+                alice_mailbox,
+                alice_password,
+                max_chunk_size=5,
+                timeout=0.5)
+            with self.assertRaises(requests.exceptions.Timeout):
+                client.list_messages()
+
+
+
 class MeshChunkRetryClientTest(TestCase):
     def run(self, result=None):
-        self.chunk_retry_call_counts = {}
         try:
             with MockMeshChunkRetryApplication(shared_key) as mock_app:
                 self.mock_app = mock_app
@@ -308,22 +348,22 @@ class MeshChunkRetryClientTest(TestCase):
             print("Message store", self.mock_app.messages)
             raise
 
-    def wrapped_post(self, url, data, **kwargs):
-        current_chunk = int(kwargs['headers']['Mex-Chunk-Range'].split(':')[0])
-        if current_chunk not in self.chunk_retry_call_counts.keys():
-            self.chunk_retry_call_counts[current_chunk] = 0
-        else:
-            self.chunk_retry_call_counts[current_chunk] += 1
+    def _count_chunk_retry_call_counts(self, mocked_post):
+        counts = {}
+        for call in mocked_post.call_args_list:
+            chunk = int(call.kwargs['headers']['Mex-Chunk-Range'].split(':')[0])
+            if chunk not in counts.keys():
+                counts[chunk] = 0
+            else:
+                counts[chunk] += 1
+        return counts
 
-        response = unmocked_post(url, data, **kwargs)
-        return response
 
-    @mock.patch('requests.post')
-    def test_chunk_retries(self, mock_post):
-        mock_post.side_effect = self.wrapped_post
-
+    def test_chunk_retries(self):
         alice = self.alice
         bob = self.bob
+        mock_post = mock.Mock(wraps=alice._session.post)
+        alice._session.post = mock_post
 
         chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
         options = [chunk_options(2, 2)]
@@ -334,15 +374,15 @@ class MeshChunkRetryClientTest(TestCase):
         received = bob.retrieve_message(message_id).read()
         self.assertEqual(received, b'Hello World')
 
-        self.assertEqual(self.chunk_retry_call_counts[1], 0)
-        self.assertEqual(self.chunk_retry_call_counts[2], 3)
-        self.assertEqual(self.chunk_retry_call_counts[3], 0)
+        chunk_retry_call_counts = self._count_chunk_retry_call_counts(mock_post)
+        self.assertEqual(chunk_retry_call_counts[1], 0)
+        self.assertEqual(chunk_retry_call_counts[2], 3)
+        self.assertEqual(chunk_retry_call_counts[3], 0)
 
-    @mock.patch('requests.post')
-    def test_chunk_all_retries_fail(self, mock_post):
-        mock_post.side_effect = self.wrapped_post
-
+    def test_chunk_all_retries_fail(self):
         alice = self.alice
+        mock_post = mock.Mock(wraps=alice._session.post)
+        alice._session.post = mock_post
 
         chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
         options = [chunk_options(2, 3)]
@@ -350,15 +390,15 @@ class MeshChunkRetryClientTest(TestCase):
 
         self.assertRaises(requests.exceptions.HTTPError, alice.send_message, bob_mailbox, b"Hello World")
 
-        self.assertEqual(self.chunk_retry_call_counts[1], 0)
-        self.assertEqual(self.chunk_retry_call_counts[2], 3)
+        chunk_retry_call_counts = self._count_chunk_retry_call_counts(mock_post)
+        self.assertEqual(chunk_retry_call_counts[1], 0)
+        self.assertEqual(chunk_retry_call_counts[2], 3)
 
-    @mock.patch('requests.post')
-    def test_chunk_retries_with_file(self, mock_post):
-        mock_post.side_effect = self.wrapped_post
-
+    def test_chunk_retries_with_file(self):
         alice = self.alice
         bob = self.bob
+        mock_post = mock.Mock(wraps=alice._session.post)
+        alice._session.post = mock_post
 
         chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
         options = [chunk_options(2, 2)]
@@ -369,9 +409,10 @@ class MeshChunkRetryClientTest(TestCase):
         received = bob.retrieve_message(message_id).read()
         self.assertEqual(received, b'test1 test2 test3')
 
-        self.assertEqual(self.chunk_retry_call_counts[1], 0)
-        self.assertEqual(self.chunk_retry_call_counts[2], 3)
-        self.assertEqual(self.chunk_retry_call_counts[3], 0)
+        chunk_retry_call_counts = self._count_chunk_retry_call_counts(mock_post)
+        self.assertEqual(chunk_retry_call_counts[1], 0)
+        self.assertEqual(chunk_retry_call_counts[2], 3)
+        self.assertEqual(chunk_retry_call_counts[3], 0)
 
 
 if __name__ == "__main__":

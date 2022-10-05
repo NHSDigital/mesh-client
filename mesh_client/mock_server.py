@@ -14,13 +14,15 @@ also included, and the settings to use them are included in the mesh_client
 package as default_ssl_opts. Since these certs and keys are publicly available,
 they should only be used in test environments.
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
+import datetime
 import hmac
 import json
-import datetime
-import ssl
-import traceback
 import os.path
+import random
+import ssl
+import time
+import traceback
 import zlib
 from contextlib import closing
 from hashlib import sha256
@@ -28,6 +30,7 @@ from collections import OrderedDict
 from threading import Thread
 from wsgiref.util import shift_path_info
 from wsgiref.simple_server import make_server, WSGIServer
+from six.moves.urllib.parse import parse_qs
 from .io_helpers import stream_from_wsgi_environ
 
 _OPTIONAL_HEADERS = {
@@ -119,7 +122,12 @@ class MockMeshApplication:
 
     @property
     def __call__(self):
-        return _compose(messageexchange=self.message_exchange)
+        return _compose(
+            messageexchange=self.message_exchange,
+            endpointlookup=_compose(
+                mesh=self.endpoint_lookup
+            )
+        )
 
     def authenticated(self, handler):
         def handle(environ, start_response):
@@ -298,39 +306,72 @@ class MockMeshApplication:
 
     def tracking(self, environ, start_response):
         tracking_id = shift_path_info(environ)
-        if not tracking_id:
+        msg_id = parse_qs(environ['QUERY_STRING']).get('messageID', [None])[0]
+        if tracking_id:
+            message = self._find_message_by_local_id(tracking_id)
+        elif msg_id:
+            message = self.messages.get(msg_id)
+        else:
             return _bad_request(environ, start_response)
-        for message in self.messages.values():
-            if message.get('headers', {}).get('Mex-LocalID') == tracking_id:
-                headers = message['headers']
-                recipient = headers['Mex-To']
-                message_id = headers['Mex-MessageID']
-                acked = message_id not in self.messages[recipient]
-                now = datetime.datetime.now().strftime(TIMESTAMP_FORMAT)
-                response = {
-                    "localId": tracking_id,
-                    "dtsId": message_id,
-                    "messageType": "DATA",
-                    "chunkCount": len(message['chunks']),
-                    "subject": headers.get('Mex-Subject'),
-                    "statusEvent": None,
-                    "version": "1.0",
-                    "downloadTimestamp": now,
-                    "statusDescription": None,
-                    "status": "Acknowledged" if acked else "Accepted",
-                    "workflowId": headers.get('Mex-WorkflowID'),
-                    "fileName": headers.get('Mex-FileName'),
-                    "uploadTimestamp": now,
-                    "recipient": headers['Mex-To'],
-                    "sender": headers['Mex-From'],
-                    "messageId": message_id,
-                    "fileSize": 0
-                }
-                return _ok('application/json',
-                           [json.dumps(response).encode('UTF-8')],
-                           start_response)
+
+        if message:
+            headers = message['headers']
+            recipient = headers['Mex-To']
+            message_id = headers['Mex-MessageID']
+            acked = message_id not in self.messages[recipient]
+            now = datetime.datetime.now().strftime(TIMESTAMP_FORMAT)
+            response = {
+                "localId": tracking_id,
+                "dtsId": message_id,
+                "messageType": "DATA",
+                "chunkCount": len(message['chunks']),
+                "subject": headers.get('Mex-Subject'),
+                "statusEvent": None,
+                "version": "1.0",
+                "downloadTimestamp": now,
+                "statusDescription": None,
+                "status": "Acknowledged" if acked else "Accepted",
+                "workflowId": headers.get('Mex-WorkflowID'),
+                "fileName": headers.get('Mex-FileName'),
+                "uploadTimestamp": now,
+                "recipient": headers['Mex-To'],
+                "sender": headers['Mex-From'],
+                "messageId": message_id,
+                "fileSize": 0
+            }
+            return _ok('application/json',
+                       [json.dumps(response).encode('UTF-8')],
+                       start_response)
         else:
             return _not_found(environ, start_response)
+
+    def _find_message_by_local_id(self, local_id):
+        for message in self.messages.values():
+            if message.get('headers', {}).get('Mex-LocalID') == local_id:
+                return message
+        else:
+            return None
+
+    def endpoint_lookup(self, environ, start_response):
+        org_code = shift_path_info(environ)
+        workflow_id = shift_path_info(environ)
+        if not org_code or not workflow_id:
+            return _not_found(environ, start_response)
+        result = {
+            "query_id": "{ts:%Y%m%d%H%M%S%f}_{rnd:06x}_{ts:%s}".format(
+                ts=datetime.datetime.now(),
+                rnd=random.randint(0, 0xffffff)),
+            "results": [
+                {
+                    "address": "{}HC001".format(org_code),
+                    "description": "{} {} endpoint".format(org_code, workflow_id),
+                    "endpoint_type": "MESH"
+                }
+            ]
+        }
+        return _ok('application/json',
+                   [json.dumps(result).encode('UTF-8')],
+                   start_response)
 
     def make_message_id(self):
         """
@@ -396,6 +437,12 @@ class MockMeshChunkRetryApplication(MockMeshApplication, object):
                 return _error("application/json", '', start_response)
 
         return super(MockMeshChunkRetryApplication, self).outbox(environ, start_response)
+
+
+class SlowMockMeshApplication(MockMeshApplication):
+    def __call__(self, environ, start_response):
+        time.sleep(2.0)
+        return super(SlowMockMeshApplication, self).__call__(environ, start_response)
 
 
 _data_dir = os.path.dirname(__file__)

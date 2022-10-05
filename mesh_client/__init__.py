@@ -1,18 +1,21 @@
 from __future__ import absolute_import
-import codecs
 import collections
-import uuid
-import hmac
+import warnings
+import functools
 import datetime
-import os.path
+import hmac
 import pkg_resources
 import platform
 import requests
 import six
 import time
+import uuid
+from hashlib import sha256
 from io import BytesIO
 from itertools import chain
-from hashlib import sha256
+from six.moves.urllib.parse import quote as q
+
+
 from .io_helpers import \
     CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
 
@@ -39,6 +42,8 @@ TRAIN_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-train-ca-bun
 LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-live-root-ca.pem")
 OPENTEST_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-opt-ca-bundle.pem")
 DIGICERT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-digicert-ca-bundle.pem")
+IG_INT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-ig-int-ca-bundle.pem")
+IG_LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-ig-live-ca-bundle.pem")
 
 
 _OPTIONAL_HEADERS = {
@@ -53,6 +58,8 @@ _OPTIONAL_HEADERS = {
     "checksum": "Mex-Content-Checksum"
 }
 
+_BOOLEAN_HEADERS = {"compressed", "encrypted"}
+
 _RECEIVE_HEADERS = {
     "sender": "Mex-From",
     "recipient": "Mex-To",
@@ -63,6 +70,7 @@ _RECEIVE_HEADERS = {
     "sender_smtp": "Mex-FromSMTP",
 }
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
+
 
 VERSION = pkg_resources.get_distribution('mesh_client').version
 
@@ -78,9 +86,26 @@ NHS_DEP_ENDPOINT = Endpoint('https://msg.dep.spine2.ncrs.nhs.uk', DEP_CA_CERT, N
 NHS_TRAIN_ENDPOINT = Endpoint('https://msg.train.spine2.ncrs.nhs.uk', TRAIN_CA_CERT, None)
 NHS_LIVE_ENDPOINT = Endpoint('https://mesh-sync.national.ncrs.nhs.uk', LIVE_CA_CERT, None)
 NHS_OPENTEST_ENDPOINT = Endpoint('https://192.168.128.11', OPENTEST_CA_CERT, None)
-NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh.spineservices.nhs.uk', DIGICERT_CA_CERT, None)
-# Internet gateway int serves up an invalid certificate, so validation has to be disabled
-NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint('https://mesh.intspineservices.nhs.uk', False, None)
+NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh-sync.spineservices.nhs.uk', IG_LIVE_CA_CERT, None)
+NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint('https://msg.intspineservices.nhs.uk', IG_INT_CA_CERT, None)
+
+
+def deprecated(reason=None):
+    """This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emitted
+    when the function is used."""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def new_func(*args, **kwargs):
+            msg_extra = (reason or "").strip()
+            if msg_extra:
+                msg_extra = " " + msg_extra
+            message = "Call to deprecated function {}.".format(func.__name__, msg_extra)
+            warnings.warn(message, category=DeprecationWarning, stacklevel=2)
+            return func(*args, **kwargs)
+        return new_func
+    return decorator
 
 
 class MeshError(Exception):
@@ -104,7 +129,8 @@ class MeshClient(object):
                  max_chunk_size=75 * 1024 * 1024,
                  proxies=None,
                  transparent_compress=False,
-                 max_chunk_retries=0):
+                 max_chunk_retries=0,
+                 timeout=10*60):
         """
         Create a new MeshClient.
 
@@ -117,7 +143,8 @@ class MeshClient(object):
         NHS_INT_ENDPOINT
         NHS_LIVE_ENDPOINT
         NHS_OPENTEST_ENDPOINT
-        NHS_INTERNET_ENDPOINT
+        NHS_INTERNET_GATEWAY_INT_ENDPOINT
+        NHS_INTERNET_GATEWAY_ENDPOINT
 
         Since MESH uses mutual authentication, it is also highly
         advisable to provide SSL information, in the form of cert and verify.
@@ -134,79 +161,112 @@ class MeshClient(object):
         and whether messages should be compressed, transparently, before
         sending.
         """
+
+        self._session = requests.Session()
+        self._session.headers = {
+            "User-Agent": (
+                "mesh_client;{};N/A;{};{};{} {}".format(
+                    VERSION,
+                    platform.processor() or platform.machine(),
+                    platform.system(),
+                    platform.release(),
+                    platform.version()
+                )
+            ),
+            "Accept-Encoding": "gzip"
+        }
+        self._session.auth = AuthTokenGenerator(shared_key, mailbox, password)
         if hasattr(url, 'url'):
             self._url = url.url
         else:
             self._url = url
 
         if hasattr(url, 'cert') and cert is None:
-            self._cert = url.cert
+            self._session.cert = url.cert
         else:
-            self._cert = cert
+            self._session.cert = cert
 
         if hasattr(url, 'verify') and verify is None:
-            self._verify = url.verify
+            self._session.verify = url.verify
         else:
-            self._verify = verify
+            self._session.verify = verify
 
+        self._session.proxies = proxies or {}
         self._mailbox = mailbox
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
-        self._proxies = proxies or {}
-        self._token_generator = _AuthTokenGenerator(shared_key, mailbox, password)
-        self.max_chunk_retries = max_chunk_retries
-
-    def _headers(self, extra_headers=None):
-        headers = {"Authorization": self._token_generator(), "Accept-Encoding": "gzip"}
-        headers.update(extra_headers or {})
-        return headers
+        self._max_chunk_retries = max_chunk_retries
+        self._timeout = timeout
+        self._close_called = False
 
     def handshake(self):
         """
         List all messages in user's inbox. Returns a list of message_ids
         """
-        response = requests.post(
-            "{}/messageexchange/{}".format(self._url, self._mailbox),
-            headers=self._headers({
-                "mex-ClientVersion": "mesh_client=={}".format(VERSION),
-                "mex-OSArchitecture": platform.processor(),
-                "mex-OSName": platform.system(),
-                "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
-                "mex-JavaVersion": "N/A"
-            }),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies
+        headers = {
+            "mex-ClientVersion": "mesh_client=={}".format(VERSION),
+            "mex-OSArchitecture": platform.processor() or platform.machine(),
+            "mex-OSName": platform.system(),
+            "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
+            "mex-JavaVersion": "N/A"
+        }
+        response = self._session.post(
+            "{}/messageexchange/{}".format(self._url, q(self._mailbox)), headers=headers,
+            timeout=self._timeout
         )
 
         response.raise_for_status()
 
         return b'hello'
 
+    @deprecated("this api endpoint is marked as deprecated")
     def count_messages(self):
         """
         Count all messages in user's inbox. Returns an integer
         """
-        response = requests.get(
-            "{}/messageexchange/{}/count".format(self._url, self._mailbox),
-            headers=self._headers(),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies)
+        response = self._session.get(
+            "{}/messageexchange/{}/count".format(self._url, q(self._mailbox)),
+            timeout=self._timeout)
         response.raise_for_status()
         return response.json()["count"]
 
-    def get_tracking_info(self, tracking_id):
+    def track_by_message_id(self, message_id=None):
+        """
+        Gets tracking information from MESH about a message, by its  message id.
+        Returns a dictionary, in much the same format that MESH provides it.
+        """
+        url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, q(self._mailbox), q(message_id))
+
+        response = self._session.get(url, timeout=self._timeout)
+        response.raise_for_status()
+        return response.json()
+
+    @deprecated(reason="tracking by local_id is deprecated, please use 'track_by_message_id'")
+    def get_tracking_info(self, tracking_id=None, message_id=None):
         """
         Gets tracking information from MESH about a message, by its local message id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
-        response = requests.get(
-            "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, self._mailbox, tracking_id),
-            headers=self._headers(),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies)
+        if (tracking_id is not None) + (message_id is not None) != 1:
+            raise ValueError("Exactly one of local message id (called tracking_id, for historical reasons) and message_id must be provided")
+
+        if tracking_id:
+            url = "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, q(self._mailbox), q(tracking_id))
+        else:
+            url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, q(self._mailbox), q(message_id))
+
+        response = self._session.get(url, timeout=self._timeout)
+        response.raise_for_status()
+        return response.json()
+
+    def lookup_endpoint(self, organisation_code, workflow_id):
+        """
+        Lookup a mailbox by organisation code and workflow id.
+        Returns a dictionary, in much the same format that MESH provides it.
+        """
+        response = self._session.get(
+            "{}/endpointlookup/mesh/{}/{}".format(self._url, q(organisation_code), q(workflow_id)),
+            timeout=self._timeout)
         response.raise_for_status()
         return response.json()
 
@@ -214,12 +274,9 @@ class MeshClient(object):
         """
         List all messages in user's inbox. Returns a list of message_ids
         """
-        response = requests.get(
-            "{}/messageexchange/{}/inbox".format(self._url, self._mailbox),
-            headers=self._headers(),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies)
+        response = self._session.get(
+            "{}/messageexchange/{}/inbox".format(self._url, q(self._mailbox)),
+            timeout=self._timeout)
         response.raise_for_status()
         return response.json()["messages"]
 
@@ -229,24 +286,18 @@ class MeshClient(object):
         object
         """
         message_id = getattr(message_id, "_msg_id", message_id)
-        response = requests.get(
-            "{}/messageexchange/{}/inbox/{}".format(self._url, self._mailbox, message_id),
-            headers=self._headers(),
+        response = self._session.get(
+            "{}/messageexchange/{}/inbox/{}".format(self._url, q(self._mailbox), q(message_id)),
             stream=True,
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies)
+            timeout=self._timeout)
         response.raise_for_status()
         return Message(message_id, response, self)
 
     def retrieve_message_chunk(self, message_id, chunk_num):
-        response = requests.get(
-            "{}/messageexchange/{}/inbox/{}/{}".format(self._url, self._mailbox, message_id, chunk_num),
-            headers=self._headers(),
+        response = self._session.get(
+            "{}/messageexchange/{}/inbox/{}/{}".format(self._url, q(self._mailbox), q(message_id), chunk_num),
             stream=True,
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies)
+            timeout=self._timeout)
         response.raise_for_status()
         return response
 
@@ -288,15 +339,18 @@ class MeshClient(object):
             lambda stream: GzipCompressStream(
                 stream) if transparent_compress else stream
         )
-        headers = self._headers({
+        headers = {
             "Mex-From": self._mailbox,
             "Mex-To": recipient,
             "Mex-MessageType": 'DATA',
-            "Mex-Version": '1.0'
-        })
+            "Mex-Version": '1.0',
+            "Content-Type": "application/octet-stream",
+        }
 
         for key, value in kwargs.items():
             if key in _OPTIONAL_HEADERS:
+                if key in _BOOLEAN_HEADERS:
+                    value = 'Y' if value else 'N'
                 headers[_OPTIONAL_HEADERS[key]] = str(value)
             else:
                 raise TypeError("Unrecognised keyword argument {key}."
@@ -307,7 +361,7 @@ class MeshClient(object):
                                     ] + list(_OPTIONAL_HEADERS.keys()))))
 
         if transparent_compress:
-            headers["Mex-Content-Compress"] = "TRUE"
+            headers["Mex-Content-Compress"] = "Y"
             headers["Content-Encoding"] = "gzip"
 
         chunks = SplitStream(data, self._max_chunk_size)
@@ -315,13 +369,14 @@ class MeshClient(object):
         chunk_iterator = iter(chunks)
 
         chunk1 = maybe_compressed(six.next(chunk_iterator))
-        response1 = requests.post(
-            "{}/messageexchange/{}/outbox".format(self._url, self._mailbox),
+        response1 = self._session.post(
+            "{}/messageexchange/{}/outbox".format(self._url, q(self._mailbox)),
             data=chunk1,
             headers=headers,
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies)
+            timeout=self._timeout)
+        # MESH server dumps XML SOAP output on internal server error
+        if response1.status_code >= 500:
+            response1.raise_for_status()
         json_resp = response1.json()
         if response1.status_code == 417 or "errorDescription" in json_resp:
             raise MeshError(json_resp["errorDescription"], json_resp)
@@ -330,7 +385,7 @@ class MeshClient(object):
         for i, chunk in enumerate(chunk_iterator):
             data = maybe_compressed(chunk)
 
-            if self.max_chunk_retries > 0:
+            if self._max_chunk_retries > 0:
                 if hasattr(data, 'read'):
                     data = data.read()
                 buf = BytesIO(data)
@@ -338,31 +393,29 @@ class MeshClient(object):
                 buf = data
 
             chunk_num = i + 2
-            headers = self._headers({
+            headers = {
                 "Content-Type": "application/octet-stream",
                 "Mex-Chunk-Range": "{}:{}".format(chunk_num, len(chunks)),
                 "Mex-From": self._mailbox,
-            })
+            }
             if transparent_compress:
-                headers["Mex-Content-Compress"] = "TRUE"
+                headers["Mex-Content-Compress"] = "Y"
                 headers["Content-Encoding"] = "gzip"
 
             response = None
-            for i in range(self.max_chunk_retries + 1):
-                if self.max_chunk_retries > 0:
+            for i in range(self._max_chunk_retries + 1):
+                if self._max_chunk_retries > 0:
                     buf.seek(0)
 
                 # non-linear delay in terms of squares
                 time.sleep(i**2)
 
-                response = requests.post(
+                response = self._session.post(
                     "{}/messageexchange/{}/outbox/{}/{}".format(
-                        self._url, self._mailbox, message_id, chunk_num),
+                        self._url, q(self._mailbox), q(message_id), chunk_num),
                     data=buf,
                     headers=headers,
-                    cert=self._cert,
-                    verify=self._verify,
-                    proxies=self._proxies)
+                    timeout=self._timeout)
 
                 # check other successful response codes
                 if response.status_code == 200 or response.status_code == 202:
@@ -377,13 +430,10 @@ class MeshClient(object):
         Acknowledge a message_id, deleting it from MESH.
         """
         message_id = getattr(message_id, "_msg_id", message_id)
-        response = requests.put(
+        response = self._session.put(
             "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(
-                self._url, self._mailbox, message_id),
-            headers=self._headers(),
-            cert=self._cert,
-            verify=self._verify,
-            proxies=self._proxies)
+                self._url, q(self._mailbox), q(message_id)),
+            timeout=self._timeout)
         response.raise_for_status()
 
     def iterate_all_messages(self):
@@ -395,6 +445,28 @@ class MeshClient(object):
         """
         for msg_id in self.list_messages():
             yield self.retrieve_message(msg_id)
+
+    def close(self):
+        self._close_called = True
+        self._session.close()
+
+    def __del__(self):
+        if not self._close_called:
+            warnings.warn(
+                "The API of MeshClient changed in mesh_client 1.0. Each"
+                " MeshClient instance must now be closed when the instance is"
+                " no longer needed. This can be achieved by using the close"
+                " method, or by using MeshClient in a with block. The"
+                " connection pool will be closed for you by the destructor"
+                " on this occasion, but you should not rely on this."
+            )
+            self.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type_, value, tb):
+        self.close()
 
 
 class Message(object):
@@ -443,9 +515,9 @@ class Message(object):
 
         for key, value in _RECEIVE_HEADERS.items():
             header_value = headers.get(value, None)
-            if key in ["compressed", "encrypted"]:
-                header_value = header_value or "FALSE"
-                header_value = header_value.upper() == "TRUE"
+            if key in _BOOLEAN_HEADERS:
+                header_value = header_value or "N"
+                header_value = header_value.upper() in ["Y", "TRUE"]
             setattr(self, key, header_value)
         chunk, chunk_count = map(
             int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
@@ -532,7 +604,7 @@ class Message(object):
         return iter(self._response)
 
 
-class _AuthTokenGenerator(object):
+class AuthTokenGenerator(object):
 
     def __init__(self, key, mailbox, password):
         self._key = key
@@ -541,8 +613,18 @@ class _AuthTokenGenerator(object):
         self._nonce = uuid.uuid4()
         self._nonce_count = 0
 
-    def __call__(self):
-        now = datetime.datetime.now().strftime("%Y%m%d%H%M")
+    def __call__(self, r=None):
+        token = self.generate_token()
+        if r is not None:
+            # This is being used as a Requests auth handler
+            r.headers['Authorization'] = token
+            return r
+        else:
+            # This is being used in its legacy capacity
+            return token
+
+    def generate_token(self):
+        now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M")
         public_auth_data = _combine(self._mailbox, self._nonce,
                                     self._nonce_count, now)
         private_auth_data = _combine(self._mailbox, self._nonce,
@@ -551,6 +633,10 @@ class _AuthTokenGenerator(object):
                            sha256).hexdigest()
         self._nonce_count += 1
         return "NHSMESH {public_auth_data}:{myhash}".format(**locals())
+
+
+# Preserve old name, even though it's part of the API now
+_AuthTokenGenerator = AuthTokenGenerator
 
 
 def _combine(*elements):

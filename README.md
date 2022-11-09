@@ -76,4 +76,5 @@ python -m build
 twine upload -r testpypi dist/*
 # Check artifacts are uploaded correctly, and that entry on PyPI looks correct
 twine upload dist/*
+git push --tags
 ```

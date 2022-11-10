@@ -7,12 +7,12 @@ with open(join(dirname(__file__), 'README.md')) as f:
 
 setup(
     name='Mesh Client',
-    description='Client for NHS Digital \'s MESH messaging system',
-    url='https://github.com/jamespic/mesh-client',
+    description='Client for NHS Digital\'s MESH messaging system',
+    url='https://github.com/NHSDigital/mesh-client',
     long_description=long_description,
     long_description_content_type='text/markdown',
     author='James Pickering',
-    author_email='james.pickering@airelogic.com',
+    author_email='api.management@nhs.net',
     packages=['mesh_client'],
     package_data={'mesh_client': ['*.pem']},
     install_requires=[

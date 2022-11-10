@@ -1,7 +1,7 @@
 MESH Client
 ===========
 
-A Python client for [NHS Digital's MESH API](https://meshapi.docs.apiary.io/).
+A Python client for [NHS Digital's MESH API](https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api).
 
 Installation
 ------------

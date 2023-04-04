@@ -300,10 +300,13 @@ class MeshClient(object):
         response.raise_for_status()
         return response
 
-    def send_message(self,
-                     recipient,
-                     data,
-                     **kwargs):
+    def send_message(
+         self,
+         recipient,
+         data,
+         max_chunk_size = None,
+         **kwargs
+    ):
         """
         Send a message to recipient containing data.
 
@@ -363,7 +366,8 @@ class MeshClient(object):
             headers["Mex-Content-Compress"] = "Y"
             headers["Content-Encoding"] = "gzip"
 
-        chunks = SplitStream(data, self._max_chunk_size)
+        max_chunk_size = max_chunk_size or self._max_chunk_size
+        chunks = SplitStream(data, max_chunk_size)
         headers["Mex-Chunk-Range"] = "1:{}".format(len(chunks))
         chunk_iterator = iter(chunks)
 
@@ -518,8 +522,7 @@ class Message(object):
                 header_value = header_value or "N"
                 header_value = header_value.upper() in ["Y", "TRUE"]
             setattr(self, key, header_value)
-        chunk, chunk_count = map(
-            int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
+        chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
         maybe_decompress = (
             lambda resp:
             GzipDecompressStream(resp.raw)

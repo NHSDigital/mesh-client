@@ -113,6 +113,43 @@ class MeshClientTest(TestCase):
         msg.acknowledge()
         self.assertEqual([], bob.list_messages())
 
+
+    def test_send_receive_combine_chunked_small_chunk_size(self):
+        alice = self.alice
+        bob = self.bob
+
+        part1_length = 4
+        part2_length = 20
+
+        stream = {
+            'Body': CombineStreams([io.BytesIO(b"H"*part1_length), io.BytesIO((b"W"*part2_length))]),
+            'ContentLength': part1_length + part2_length,
+        }
+
+        message_id = alice.send_message(bob_mailbox, stream)
+        self.assertEqual([message_id], bob.list_messages())
+        self.assertEqual(1, bob.count_messages())
+        msg = bob.retrieve_message(message_id)
+        self.assertEqual(msg.mex_header("chunk-range"), "1:5")
+
+    def test_send_receive_combine_chunked_override_chunk_size(self):
+        alice = self.alice
+        bob = self.bob
+
+        part1_length = 4
+        part2_length = 20
+
+        stream = {
+            'Body': CombineStreams([io.BytesIO(b"H"*part1_length), io.BytesIO((b"W"*part2_length))]),
+            'ContentLength': part1_length + part2_length,
+        }
+
+        message_id = alice.send_message(bob_mailbox, stream, max_chunk_size=1)
+        self.assertEqual([message_id], bob.list_messages())
+        self.assertEqual(1, bob.count_messages())
+        msg = bob.retrieve_message(message_id)
+        self.assertEqual(msg.mex_header("chunk-range"), "1:24")
+
     def test_send_receive_combine_streams_part1_not_multiple_of_chunk_size(self):
         alice = self.alice
         bob = self.bob

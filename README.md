@@ -7,7 +7,7 @@ Installation
 ------------
 
 ```bash
-pip install mesh_client
+pip install mesh-client
 ```
 
 Example use
@@ -67,6 +67,8 @@ tox
 ```
 
 For releases, we use twine. The rough release process would be:
+the below assumes you have a shared key for testpypi and a specific repository configured for the mesh-client publishing ...
+https://packaging.python.org/en/latest/specifications/pypirc/
 
 ```bash
 tox  # Re-run tests, just to be sure
@@ -75,6 +77,6 @@ rm dist/*  # Get rid of previous distribution files
 python -m build
 twine upload -r testpypi dist/*
 # Check artifacts are uploaded correctly, and that entry on PyPI looks correct
-twine upload dist/*
+twine upload -r mesh-client dist/*
 git push --tags
 ```

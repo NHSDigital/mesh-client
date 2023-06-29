@@ -1,5 +1,141 @@
-[build-system]
-requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
-build-backend = "setuptools.build_meta"
+[tool.poetry]
+name = "Mesh Client"
+version = "0.0.0"
+description = "Client for NHS England's MESH messaging system"
+repository = "https://github.com/NHSDigital/mesh-client"
+authors = ["spinecore"]
+license = "MIT"
+packages = [
+    { include = "mesh_client" },
+]
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
 
-[tool.setuptools_scm]
+# including this would turn on pyproject.toml for setuptools and fail validation
+#[tool.setuptools.package-data]
+#"mesh_client" = [
+#    "py.typed",
+#    "*.pem"
+#]
+
+[tool.poetry.dependencies]
+# core dependencies
+python = ">=2.7"
+requests = ">=2.9.0"
+six = ">=1.10.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.3.0"
+isort = {version = "^5.12.0", python = ">=3.8"}
+mypy = "^1.4.1"
+flake8 = {version = "^6.0.0", python = ">=3.8.1"}
+flake8-pyproject = "^1.2.3"
+flake8-black = "^0.3.6"
+types-six = "^1.16.21.8"
+types-requests = "^2.31.0.1"
+types-mock = "^5.0.0.7"
+mock = "^5.0.2"
+build = "^0.10.0"
+twine = "^4.0.2"
+toml = "^0.10.2"
+setuptools-scm = "^7.1.0"
+tox = "^4.6.3"
+types-pkg-resources = "^0.1.3"
+
+[tool.poetry.group.local.dependencies]
+ipython = {version = "^8.14.0", python = ">=3.9"}
+
+[tool.black]
+line-length = 120
+target-version = ['py37']
+include = '\.pyi?$'
+#extend-exclude = '''
+#/(
+#  # The following are specific to Black, you probably don't want those.
+#  | blib2to3
+#  | tests/data
+#  | profiling
+#)/
+#'''
+
+[tool.flake8]
+ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "build",
+    "dist",
+    ".tox",
+    ".eggs"
+]
+#extend-ignore = ["E203"]
+#per-file-ignores = [
+#    '__init__.py:F401',
+#]
+max-line-length = 120
+count = true
+
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py27,py37,py38,py39,py310,py311
+
+[gh-actions]
+python =
+    2.7: py27
+    3.7: py37
+    3.8: py38
+    3.9: py39
+    3.10: py310
+    3.11: py311
+
+[testenv]
+deps=requests>=2.9.0
+     six>=1.10.0
+     mock
+commands =
+    python --version
+    python -m unittest discover . '*_test.py'
+
+"""
+
+[tool.mypy]
+python_version = "3.7"
+warn_return_any = true
+warn_unused_configs = true
+show_error_codes = true
+check_untyped_defs = true
+
+[tool.isort]
+profile = "black"
+
+#[tool.setuptools_scm]
+#local_scheme = "no-local-version"
+#version_scheme = "post-release"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+metadata = false
+vcs = "git"
+style = "pep440"
+format-jinja = """
+    {%- if distance == 0 -%}
+        {{ serialize_pep440(base, stage, revision) }}
+    {%- else -%}
+        {{ serialize_pep440(bump_version(base), stage, revision, dev=timestamp) }}
+    {%- endif -%}
+"""
+pattern = "(?x)^((?P<epoch>\\d+)!)?(?P<base>\\d+(\\.\\d+)*)([-._]?((?P<stage>[a-zA-Z]+)[-._]?(?P<revision>\\d+)?))?(\\+(?P<tagged_metadata>.+))?$"
+
+
+[build-system]
+requires = ["setuptools>=42", "toml", "wheel", "setuptools_scm[toml]>=3.4"]
+build-backend = "setuptools.build_meta"

@@ -1,22 +1,34 @@
 from __future__ import absolute_import, print_function
 
 import io
+import signal
+import sys
+import traceback
+from collections import namedtuple
+from typing import Dict
 from unittest import TestCase, main
+
 import mock
 import requests
-import signal
-import traceback
-import sys
-
-from collections import namedtuple
-from mesh_client import MeshClient, MeshError, default_ssl_opts, CombineStreams, LOCAL_MOCK_ENDPOINT
-from mesh_client.mock_server import MockMeshApplication, MockMeshChunkRetryApplication, SlowMockMeshApplication
 from six.moves.urllib.error import HTTPError
 
-alice_mailbox = 'alice'
-alice_password = 'password'
-bob_mailbox = 'bob'
-bob_password = 'password'
+from mesh_client import (
+    LOCAL_MOCK_ENDPOINT,
+    CombineStreams,
+    MeshClient,
+    MeshError,
+    default_ssl_opts,
+)
+from mesh_client.mock_server import (
+    MockMeshApplication,
+    MockMeshChunkRetryApplication,
+    SlowMockMeshApplication,
+)
+
+alice_mailbox = "alice"
+alice_password = "password"
+bob_mailbox = "bob"
+bob_password = "password"
 
 
 class MockResponse:
@@ -47,26 +59,16 @@ class MeshClientTest(TestCase):
             with MockMeshApplication() as mock_app:
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
-                with MeshClient(
-                        self.uri,
-                        alice_mailbox,
-                        alice_password,
-                        max_chunk_size=5,
-                        **default_ssl_opts) as alice:
+                with MeshClient(self.uri, alice_mailbox, alice_password, max_chunk_size=5, **default_ssl_opts) as alice:
                     self.alice = alice
-                    self.bob = MeshClient(
-                        self.uri,
-                        bob_mailbox,
-                        bob_password,
-                        max_chunk_size=5,
-                        **default_ssl_opts)
+                    self.bob = MeshClient(self.uri, bob_mailbox, bob_password, max_chunk_size=5, **default_ssl_opts)
                     super(MeshClientTest, self).run(result)
         except HTTPError as e:
             print(e.read())
             print_stack_frames()
             print("Message store", self.mock_app.messages)
             raise
-        except:
+        except:  # noqa: E722
             print_stack_frames()
             print("Message store", self.mock_app.messages)
             raise
@@ -99,20 +101,19 @@ class MeshClientTest(TestCase):
         part2_length = 23
 
         stream = {
-            'Body': CombineStreams([io.BytesIO(b"H"*part1_length), io.BytesIO((b"W"*part2_length))]),
-            'ContentLength': part1_length + part2_length,
+            "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+            "ContentLength": part1_length + part2_length,
         }
 
         message_id = alice.send_message(bob_mailbox, stream)
         self.assertEqual([message_id], bob.list_messages())
         self.assertEqual(1, bob.count_messages())
         msg = bob.retrieve_message(message_id)
-        self.assertEqual(msg.read(), b"H" * part1_length + b"W"*part2_length)
+        self.assertEqual(msg.read(), b"H" * part1_length + b"W" * part2_length)
         self.assertEqual(msg.sender, "alice")
         self.assertEqual(msg.recipient, "bob")
         msg.acknowledge()
         self.assertEqual([], bob.list_messages())
-
 
     def test_send_receive_combine_chunked_small_chunk_size(self):
         alice = self.alice
@@ -122,8 +123,8 @@ class MeshClientTest(TestCase):
         part2_length = 20
 
         stream = {
-            'Body': CombineStreams([io.BytesIO(b"H"*part1_length), io.BytesIO((b"W"*part2_length))]),
-            'ContentLength': part1_length + part2_length,
+            "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+            "ContentLength": part1_length + part2_length,
         }
 
         message_id = alice.send_message(bob_mailbox, stream)
@@ -140,8 +141,8 @@ class MeshClientTest(TestCase):
         part2_length = 20
 
         stream = {
-            'Body': CombineStreams([io.BytesIO(b"H"*part1_length), io.BytesIO((b"W"*part2_length))]),
-            'ContentLength': part1_length + part2_length,
+            "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+            "ContentLength": part1_length + part2_length,
         }
 
         message_id = alice.send_message(bob_mailbox, stream, max_chunk_size=1)
@@ -158,15 +159,15 @@ class MeshClientTest(TestCase):
         part2_length = 20
 
         stream = {
-            'Body': CombineStreams([io.BytesIO(b"H"*part1_length), io.BytesIO((b"W"*part2_length))]),
-            'ContentLength': part1_length + part2_length,
+            "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+            "ContentLength": part1_length + part2_length,
         }
 
         message_id = alice.send_message(bob_mailbox, stream)
         self.assertEqual([message_id], bob.list_messages())
         self.assertEqual(1, bob.count_messages())
         msg = bob.retrieve_message(message_id)
-        self.assertEqual(msg.read(), b"H" * part1_length + b"W"*part2_length)
+        self.assertEqual(msg.read(), b"H" * part1_length + b"W" * part2_length)
         self.assertEqual(msg.sender, "alice")
         self.assertEqual(msg.recipient, "bob")
         msg.acknowledge()
@@ -205,13 +206,12 @@ class MeshClientTest(TestCase):
 
         print("Sending")
         alice._transparent_compress = True
-        message_id = alice.send_message(
-            bob_mailbox, b"Hello Bob Compressed")
+        message_id = alice.send_message(bob_mailbox, b"Hello Bob Compressed")
         self.assertEqual([message_id], bob.list_messages())
         print("Receiving")
         msg = bob.retrieve_message(message_id)
         self.assertEqual(msg.read(), b"Hello Bob Compressed")
-        self.assertEqual(msg.mex_header('from'), 'alice')
+        self.assertEqual(msg.mex_header("from"), "alice")
         msg.acknowledge()
         self.assertEqual([], bob.list_messages())
 
@@ -222,8 +222,7 @@ class MeshClientTest(TestCase):
         alice.send_message(bob_mailbox, b"Hello Bob 2")
         alice.send_message(bob_mailbox, b"Hello Bob 3")
         messages_read = 0
-        for (msg, expected) in zip(bob.iterate_all_messages(),
-                                   [b"Hello Bob 2", b"Hello Bob 3"]):
+        for msg, expected in zip(bob.iterate_all_messages(), [b"Hello Bob 2", b"Hello Bob 3"]):
             with msg:
                 self.assertEqual(msg.read(), expected)
                 messages_read += 1
@@ -257,7 +256,8 @@ class MeshClientTest(TestCase):
             process_id="321",
             workflow_id="111",
             encrypted=False,
-            compressed=False)
+            compressed=False,
+        )
 
         with bob.retrieve_message(message_id) as msg:
             self.assertEqual(msg.subject, "Hello World")
@@ -269,8 +269,7 @@ class MeshClientTest(TestCase):
             self.assertFalse(msg.encrypted)
             self.assertFalse(msg.compressed)
 
-        message_id = alice.send_message(
-            bob_mailbox, b"Hello Bob 5", encrypted=True, compressed=True)
+        message_id = alice.send_message(bob_mailbox, b"Hello Bob 5", encrypted=True, compressed=True)
 
         with bob.retrieve_message(message_id) as msg:
             self.assertTrue(msg.encrypted)
@@ -279,36 +278,35 @@ class MeshClientTest(TestCase):
     def test_tracking(self):
         alice = self.alice
         bob = self.bob
-        tracking_id = 'Message1'
-        msg_id = alice.send_message(bob_mailbox, b'Hello World', local_id=tracking_id)
-        self.assertEqual(alice.get_tracking_info(tracking_id)['status'], 'Accepted')
+        tracking_id = "Message1"
+        msg_id = alice.send_message(bob_mailbox, b"Hello World", local_id=tracking_id)
+        self.assertEqual(alice.get_tracking_info(tracking_id)["status"], "Accepted")
         bob.acknowledge_message(msg_id)
-        self.assertEqual(alice.get_tracking_info(tracking_id)['status'], 'Acknowledged')
+        self.assertEqual(alice.get_tracking_info(tracking_id)["status"], "Acknowledged")
 
     def test_msg_id_tracking(self):
         alice = self.alice
         bob = self.bob
-        msg_id = alice.send_message(bob_mailbox, b'Hello World')
-        self.assertEqual(alice.get_tracking_info(message_id=msg_id)['status'], 'Accepted')
+        msg_id = alice.send_message(bob_mailbox, b"Hello World")
+        self.assertEqual(alice.get_tracking_info(message_id=msg_id)["status"], "Accepted")
         bob.acknowledge_message(msg_id)
-        self.assertEqual(alice.get_tracking_info(message_id=msg_id)['status'], 'Acknowledged')
+        self.assertEqual(alice.get_tracking_info(message_id=msg_id)["status"], "Acknowledged")
 
     def test_by_message_id_tracking(self):
         alice = self.alice
         bob = self.bob
-        msg_id = alice.send_message(bob_mailbox, b'Hello World')
-        self.assertEqual(alice.track_by_message_id(message_id=msg_id)['status'], 'Accepted')
+        msg_id = alice.send_message(bob_mailbox, b"Hello World")
+        self.assertEqual(alice.track_by_message_id(message_id=msg_id)["status"], "Accepted")
         bob.acknowledge_message(msg_id)
-        self.assertEqual(alice.track_by_message_id(message_id=msg_id)['status'], 'Acknowledged')
+        self.assertEqual(alice.track_by_message_id(message_id=msg_id)["status"], "Acknowledged")
 
     def test_endpoint_lookup(self):
-        result = self.alice.lookup_endpoint('ORG1', 'WF1')
-        result_list = result['results']
+        result = self.alice.lookup_endpoint("ORG1", "WF1")
+        result_list = result["results"]
         self.assertEqual(len(result_list), 1)
-        self.assertEqual(result_list[0]['address'], 'ORG1HC001')
-        self.assertEqual(result_list[0]['description'], 'ORG1 WF1 endpoint')
-        self.assertEqual(result_list[0]['endpoint_type'], 'MESH')
-
+        self.assertEqual(result_list[0]["address"], "ORG1HC001")
+        self.assertEqual(result_list[0]["description"], "ORG1 WF1 endpoint")
+        self.assertEqual(result_list[0]["endpoint_type"], "MESH")
 
     def test_error_handling(self):
         alice = self.alice
@@ -320,11 +318,7 @@ class EndpointTest(TestCase):
     def test_handshake(self):
         with MockMeshApplication() as mock_app:
             endpoint = LOCAL_MOCK_ENDPOINT._replace(url=mock_app.uri)
-            client = MeshClient(
-                endpoint,
-                alice_mailbox,
-                alice_password,
-                max_chunk_size=5)
+            client = MeshClient(endpoint, alice_mailbox, alice_password, max_chunk_size=5)
 
             hand_shook = client.handshake()
             self.assertEqual(hand_shook, b"hello")
@@ -334,73 +328,58 @@ class TimeoutTest(TestCase):
     def test_timeout(self):
         with SlowMockMeshApplication() as mock_app:
             endpoint = LOCAL_MOCK_ENDPOINT._replace(url=mock_app.uri)
-            client = MeshClient(
-                endpoint,
-                alice_mailbox,
-                alice_password,
-                max_chunk_size=5,
-                timeout=0.5)
+            client = MeshClient(endpoint, alice_mailbox, alice_password, max_chunk_size=5, timeout=0.5)
             with self.assertRaises(requests.exceptions.Timeout):
                 client.list_messages()
-
 
 
 class MeshChunkRetryClientTest(TestCase):
     def run(self, result=None):
         try:
-            with  MockMeshChunkRetryApplication() as mock_app:
+            with MockMeshChunkRetryApplication() as mock_app:
                 self.mock_app = mock_app
                 self.uri = mock_app.uri
                 self.alice = MeshClient(
-                    self.uri,
-                    alice_mailbox,
-                    alice_password,
-                    max_chunk_size=5,
-                    max_chunk_retries=3,
-                    **default_ssl_opts)
+                    self.uri, alice_mailbox, alice_password, max_chunk_size=5, max_chunk_retries=3, **default_ssl_opts
+                )
                 self.bob = MeshClient(
-                    self.uri,
-                    bob_mailbox,
-                    bob_password,
-                    max_chunk_size=5,
-                    max_chunk_retries=3,
-                    **default_ssl_opts)
+                    self.uri, bob_mailbox, bob_password, max_chunk_size=5, max_chunk_retries=3, **default_ssl_opts
+                )
                 super(MeshChunkRetryClientTest, self).run(result)
         except HTTPError as e:
             print(e.read())
             print_stack_frames()
             print("Message store", self.mock_app.messages)
             raise
-        except:
+        except:  # noqa: E722
             print_stack_frames()
             print("Message store", self.mock_app.messages)
             raise
 
     def _count_chunk_retry_call_counts(self, mocked_post):
-        counts = {}
+        counts: Dict[int, int] = {}
         for call in mocked_post.call_args_list:
-            chunk = int(call.kwargs['headers']['Mex-Chunk-Range'].split(':')[0])
+            chunk = int(call.kwargs["headers"]["Mex-Chunk-Range"].split(":")[0])
             if chunk not in counts.keys():
                 counts[chunk] = 0
             else:
                 counts[chunk] += 1
         return counts
 
-
     def test_chunk_retries(self):
         alice = self.alice
         bob = self.bob
         mock_post = mock.Mock(wraps=alice._session.post)
-        alice._session.post = mock_post
+        alice._session.post = mock_post  # type: ignore[method-assign]
 
-        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
+        chunk_options = namedtuple("chunk_options", "chunk_num num_retry_attempts")
         options = [chunk_options(2, 2)]
         self.mock_app.set_chunk_retry_options(options)
 
         message_id = alice.send_message(bob_mailbox, b"Hello World")
 
         received = bob.retrieve_message(message_id).read()
-        self.assertEqual(received, b'Hello World')
+        self.assertEqual(received, b"Hello World")
 
         chunk_retry_call_counts = self._count_chunk_retry_call_counts(mock_post)
         self.assertEqual(chunk_retry_call_counts[1], 0)
@@ -410,9 +389,9 @@ class MeshChunkRetryClientTest(TestCase):
     def test_chunk_all_retries_fail(self):
         alice = self.alice
         mock_post = mock.Mock(wraps=alice._session.post)
-        alice._session.post = mock_post
+        alice._session.post = mock_post  # type: ignore[method-assign]
 
-        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
+        chunk_options = namedtuple("chunk_options", "chunk_num num_retry_attempts")
         options = [chunk_options(2, 3)]
         self.mock_app.set_chunk_retry_options(options)
 
@@ -426,16 +405,16 @@ class MeshChunkRetryClientTest(TestCase):
         alice = self.alice
         bob = self.bob
         mock_post = mock.Mock(wraps=alice._session.post)
-        alice._session.post = mock_post
+        alice._session.post = mock_post  # type: ignore[method-assign]
 
-        chunk_options = namedtuple('Chunk', 'chunk_num num_retry_attempts')
+        chunk_options = namedtuple("chunk_options", "chunk_num num_retry_attempts")
         options = [chunk_options(2, 2)]
         self.mock_app.set_chunk_retry_options(options)
 
-        message_id = alice.send_message(bob_mailbox, open("test_chunk_retry_file", 'rb'))
+        message_id = alice.send_message(bob_mailbox, open("test_chunk_retry_file", "rb"))
 
         received = bob.retrieve_message(message_id).read()
-        self.assertEqual(received, b'test1 test2 test3')
+        self.assertEqual(received, b"test1 test2 test3")
 
         chunk_retry_call_counts = self._count_chunk_retry_call_counts(mock_post)
         self.assertEqual(chunk_retry_call_counts[1], 0)

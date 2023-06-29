@@ -1,22 +1,30 @@
 from __future__ import absolute_import, print_function
-from unittest import TestCase, main
-import io
+
 import gzip
-import six
+import io
 import tempfile
-from .io_helpers import GzipCompressStream, GzipDecompressStream, \
-    CombineStreams, SplitStream, IteratorMixin
+from contextlib import closing
+from unittest import TestCase, main
+
+import six
 from six.moves.urllib.parse import urljoin
 from six.moves.urllib.request import pathname2url, urlopen
-from contextlib import closing
+
+from mesh_client.io_helpers import (
+    CombineStreams,
+    GzipCompressStream,
+    GzipDecompressStream,
+    IteratorMixin,
+    SplitStream,
+)
 
 
 def path2url(path):
-    return urljoin('file:', pathname2url(path))
+    return urljoin("file:", pathname2url(path))
 
 
 try:
-    from itertools import izip
+    from itertools import izip  # type: ignore[attr-defined]
 except ImportError:
     izip = zip
 
@@ -31,6 +39,7 @@ class FakeMixinUser(IteratorMixin):
 
     def read(self, n):
         return self.backing_buffer.read(n)
+
 
 MIXIN_DATA = b"""a
 aa
@@ -55,7 +64,7 @@ class IOHelpersTest(TestCase):
         self.assertEqual(b"", instance.read())
 
         # Decode with GzipFile
-        test_decoder = gzip.GzipFile('', mode='r', fileobj=io.BytesIO(result))
+        test_decoder = gzip.GzipFile("", mode="r", fileobj=io.BytesIO(result))
         self.assertEqual(b"This is a short test stream", test_decoder.read())
 
     def test_gzip_compress_stream_read_all(self):
@@ -66,12 +75,12 @@ class IOHelpersTest(TestCase):
         self.assertEqual(b"", instance.read())
 
         # Decode with GzipFile
-        test_decoder = gzip.GzipFile('', mode='r', fileobj=io.BytesIO(result))
+        test_decoder = gzip.GzipFile("", mode="r", fileobj=io.BytesIO(result))
         self.assertEqual(b"This is a short test stream", test_decoder.read())
 
     def test_gzip_decompress_stream(self):
         underlying = io.BytesIO()
-        gzwriter = gzip.GzipFile(fileobj=underlying, mode='w')
+        gzwriter = gzip.GzipFile(fileobj=underlying, mode="w")
         gzwriter.write(b"This is a short test stream")
         gzwriter.close()
         underlying.seek(0)
@@ -90,7 +99,7 @@ class IOHelpersTest(TestCase):
 
     def test_gzip_decompress_stream_read_all(self):
         underlying = io.BytesIO()
-        gzwriter = gzip.GzipFile(fileobj=underlying, mode='w')
+        gzwriter = gzip.GzipFile(fileobj=underlying, mode="w")
         gzwriter.write(b"This is a short test stream")
         gzwriter.close()
         underlying.seek(0)
@@ -181,8 +190,7 @@ class IOHelpersTest(TestCase):
                 self.assertEqual(b"b" * (mebibyte - 1), chunk2.read(mebibyte))
 
     def test_split_bytes(self):
-        instance = SplitStream(b"a" * small_chunk + b"b" * small_chunk,
-                               small_chunk)
+        instance = SplitStream(b"a" * small_chunk + b"b" * small_chunk, small_chunk)
         self.assertEqual(len(instance), 2)
         for m, c in izip(instance, [b"a", b"b"]):
             self.assertEqual(c * small_chunk, m.read(small_chunk))
@@ -197,8 +205,7 @@ class IOHelpersTest(TestCase):
         self.assertEqual(b"b", chunk2.read(small_chunk))
 
     def test_split_bytes_irregular_size_2(self):
-        instance = SplitStream(b"a" * small_chunk + b"b" * (small_chunk - 1),
-                               small_chunk)
+        instance = SplitStream(b"a" * small_chunk + b"b" * (small_chunk - 1), small_chunk)
         self.assertEqual(len(instance), 2)
         iterator = iter(instance)
         chunk1 = six.next(iterator)
@@ -207,10 +214,9 @@ class IOHelpersTest(TestCase):
         self.assertEqual(b"b" * (small_chunk - 1), chunk2.read(small_chunk))
 
     def test_split_combine_stream_misaligned_with_chunk_size_1(self):
-        instance = SplitStream(dict(
-            Body=CombineStreams([io.BytesIO(b"1234"), io.BytesIO(b"567890123456789")]),
-            ContentLength=19
-        ), 5)
+        instance = SplitStream(
+            dict(Body=CombineStreams([io.BytesIO(b"1234"), io.BytesIO(b"567890123456789")]), ContentLength=19), 5
+        )
         self.assertEqual(len(instance), 4)
         iterator = iter(instance)
         chunk1 = six.next(iterator)
@@ -223,10 +229,9 @@ class IOHelpersTest(TestCase):
         self.assertEqual(b"6789", chunk4.read(5))
 
     def test_split_combine_stream_misaligned_with_chunk_size_2(self):
-        instance = SplitStream(dict(
-            Body=CombineStreams([io.BytesIO(b"123456789"), io.BytesIO(b"012345678")]),
-            ContentLength=18
-        ), 5)
+        instance = SplitStream(
+            dict(Body=CombineStreams([io.BytesIO(b"123456789"), io.BytesIO(b"012345678")]), ContentLength=18), 5
+        )
         self.assertEqual(len(instance), 4)
         iterator = iter(instance)
         chunk1 = six.next(iterator)
@@ -239,10 +244,13 @@ class IOHelpersTest(TestCase):
         self.assertEqual(b"678", chunk4.read(5))
 
     def test_split_combine_stream_misaligned_with_chunk_size_3(self):
-        instance = SplitStream(dict(
-            Body=CombineStreams([io.BytesIO(b"123"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
-            ContentLength=12
-        ), 5)
+        instance = SplitStream(
+            dict(
+                Body=CombineStreams([io.BytesIO(b"123"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
+                ContentLength=12,
+            ),
+            5,
+        )
         self.assertEqual(len(instance), 3)
         iterator = iter(instance)
         chunk1 = six.next(iterator)
@@ -277,27 +285,30 @@ class IOHelpersTest(TestCase):
         # import pudb
         # pu.db
         instance = FakeMixinUser(MIXIN_DATA, 4)
-        self.assertEqual(b'a\n', instance.readline())
-        self.assertEqual(b'aa\n', instance.readline())
-        self.assertEqual(b'aaa\n', instance.readline())
-        self.assertEqual(b'aaaa\n', instance.readline())
-        self.assertEqual(b'aaaaa\n', instance.readline())
-        self.assertEqual(b'aaaaaa\n', instance.readline())
-        self.assertEqual(b'', instance.readline())
+        self.assertEqual(b"a\n", instance.readline())
+        self.assertEqual(b"aa\n", instance.readline())
+        self.assertEqual(b"aaa\n", instance.readline())
+        self.assertEqual(b"aaaa\n", instance.readline())
+        self.assertEqual(b"aaaaa\n", instance.readline())
+        self.assertEqual(b"aaaaaa\n", instance.readline())
+        self.assertEqual(b"", instance.readline())
 
     def test_iterator_mixin_list(self):
         # import pudb
         # pu.db
         instance = FakeMixinUser(MIXIN_DATA, 4)
-        self.assertEqual([
-            b'a\n',
-            b'aa\n',
-            b'aaa\n',
-            b'aaaa\n',
-            b'aaaaa\n',
-            b'aaaaaa\n',
-        ], instance.readlines())
+        self.assertEqual(
+            [
+                b"a\n",
+                b"aa\n",
+                b"aaa\n",
+                b"aaaa\n",
+                b"aaaaa\n",
+                b"aaaaaa\n",
+            ],
+            instance.readlines(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

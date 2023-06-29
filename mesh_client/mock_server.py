@@ -14,7 +14,8 @@ also included, and the settings to use them are included in the mesh_client
 package as default_ssl_opts. Since these certs and keys are publicly available,
 they should only be used in test environments.
 """
-from __future__ import print_function, absolute_import
+from __future__ import absolute_import, print_function
+
 import datetime
 import hmac
 import json
@@ -24,13 +25,16 @@ import ssl
 import time
 import traceback
 import zlib
+from collections import OrderedDict
 from contextlib import closing
 from hashlib import sha256
-from collections import OrderedDict
 from threading import Thread
+from typing import List, cast
+from wsgiref.simple_server import WSGIServer, make_server
 from wsgiref.util import shift_path_info
-from wsgiref.simple_server import make_server, WSGIServer
+
 from six.moves.urllib.parse import parse_qs
+
 from .io_helpers import stream_from_wsgi_environ
 from .key_helper import get_shared_key_from_environ
 
@@ -50,17 +54,16 @@ _OPTIONAL_HEADERS = {
     "HTTP_MEX_CONTENT_COMPRESSED": "Mex-Content-Compressed",
     "HTTP_MEX_CHUNK_RANGE": "Mex-Chunk-Range",
     "HTTP_MEX_FROM": "Mex-From",
-    "HTTP_MEX_TO": "Mex-To"
+    "HTTP_MEX_TO": "Mex-To",
 }
 
 
-TIMESTAMP_FORMAT = '%Y%m%d%H%M%S%f'
+TIMESTAMP_FORMAT = "%Y%m%d%H%M%S%f"
 
 
 def _dumb_response_code(code, message):
     def handle(environ, start_response):
-        start_response("{} {}".format(code, message),
-                       [("Content-Type", "text/plain")])
+        start_response("{} {}".format(code, message), [("Content-Type", "text/plain")])
         return [message.encode("UTF-8")]
 
     return handle
@@ -86,7 +89,7 @@ def _error(content_type, data, start_error_response):
 
 def _compose(**kwargs):
     def handle(environ, start_response):
-        path_component = shift_path_info(environ) or 'default'
+        path_component = shift_path_info(environ) or "default"
         if path_component in kwargs:
             return kwargs[path_component](environ, start_response)
         else:
@@ -122,12 +125,7 @@ class MockMeshApplication:
 
     @property
     def __call__(self):
-        return _compose(
-            messageexchange=self.message_exchange,
-            endpointlookup=_compose(
-                mesh=self.endpoint_lookup
-            )
-        )
+        return _compose(messageexchange=self.message_exchange, endpointlookup=_compose(mesh=self.endpoint_lookup))
 
     def authenticated(self, handler):
         def handle(environ, start_response):
@@ -139,11 +137,8 @@ class MockMeshApplication:
             auth_data = authorization_header[8:]
             mailbox, nonce, nonce_count, ts, hashed = auth_data.split(":")
             expected_password = "password"
-            hash_data = ":".join([
-                mailbox, nonce, nonce_count, expected_password, ts
-            ])
-            myhash = hmac.HMAC(self._shared_key, hash_data.encode("ASCII"),
-                               sha256).hexdigest()
+            hash_data = ":".join([mailbox, nonce, nonce_count, expected_password, ts])
+            myhash = hmac.HMAC(self._shared_key, hash_data.encode("ASCII"), sha256).hexdigest()
             if myhash == hashed and mailbox == requested_mailbox:
                 environ["mesh.mailbox"] = mailbox
                 return handler(environ, start_response)
@@ -154,39 +149,30 @@ class MockMeshApplication:
 
     def handshake(self, environ, start_response):
         auth_headers = [
-            'HTTP_MEX_CLIENTVERSION',
-            'HTTP_MEX_JAVAVERSION',
-            'HTTP_MEX_OSARCHITECTURE',
-            'HTTP_MEX_OSNAME',
-            'HTTP_MEX_OSVERSION'
+            "HTTP_MEX_CLIENTVERSION",
+            "HTTP_MEX_JAVAVERSION",
+            "HTTP_MEX_OSARCHITECTURE",
+            "HTTP_MEX_OSNAME",
+            "HTTP_MEX_OSVERSION",
         ]
         for auth_header in auth_headers:
             if auth_header not in environ:
                 return _server_error(environ, start_response)
         mailbox_id = environ["mesh.mailbox"]
-        return _ok('application/json',
-                   [json.dumps({"mailboxId": mailbox_id}).encode("UTF-8")],
-                   start_response)
+        return _ok("application/json", [json.dumps({"mailboxId": mailbox_id}).encode("UTF-8")], start_response)
 
     @property
     def message_exchange(self):
         return self.authenticated(
-            _compose(
-                inbox=self.inbox,
-                outbox=self.outbox,
-                count=self.count,
-                default=self.handshake
-            )
+            _compose(inbox=self.inbox, outbox=self.outbox, count=self.count, default=self.handshake)
         )
-
 
     def inbox(self, environ, start_response):
         request_method = environ["REQUEST_METHOD"]
         message_id = shift_path_info(environ)
         mailbox = environ["mesh.mailbox"]
 
-        if (request_method == "PUT" and
-                environ["PATH_INFO"] == "/status/acknowledged"):
+        if request_method == "PUT" and environ["PATH_INFO"] == "/status/acknowledged":
             del self.messages[mailbox][message_id]
             return _simple_ok(environ, start_response)
 
@@ -194,21 +180,16 @@ class MockMeshApplication:
             if message_id:
                 chunk_num = shift_path_info(environ)
                 if chunk_num:
-                    return self.download_chunk(
-                        message_id, chunk_num)(environ, start_response)
+                    return self.download_chunk(message_id, chunk_num)(environ, start_response)
                 message = self.messages[message_id]
-                if message['headers']['Mex-To'] != mailbox:
+                if message["headers"]["Mex-To"] != mailbox:
                     return _not_found(environ, start_response)
-                response_code = ("206 Partial Content"
-                                 if "chunks" in message else "200 OK")
+                response_code = "206 Partial Content" if "chunks" in message else "200 OK"
                 start_response(response_code, list(message["headers"].items()))
                 return [message["data"]]
             else:
-                messages = {"messages": list(
-                    self.messages.get(mailbox, {}).keys())}
-                return _ok("application/json",
-                           [json.dumps(messages).encode("UTF-8")],
-                           start_response)
+                messages = {"messages": list(self.messages.get(mailbox, {}).keys())}
+                return _ok("application/json", [json.dumps(messages).encode("UTF-8")], start_response)
         else:
             return _bad_request(environ, start_response)
 
@@ -220,17 +201,14 @@ class MockMeshApplication:
                 "count": len(self.messages.get(mailbox, {})),
                 "internalID": "12345",
                 "allResultsIncluded": True,
-
             }
-            return _ok("application/json",
-                       [json.dumps(result).encode("UTF-8")],
-                       start_response)
+            return _ok("application/json", [json.dumps(result).encode("UTF-8")], start_response)
         else:
             return _bad_request(environ, start_response)
 
     def outbox(self, environ, start_response):
         chunk_msg = shift_path_info(environ)
-        if chunk_msg == 'tracking':
+        if chunk_msg == "tracking":
             return self.tracking(environ, start_response)
         if chunk_msg:
             return self.upload_chunk(chunk_msg)(environ, start_response)
@@ -241,37 +219,34 @@ class MockMeshApplication:
             assert mailbox_id == sender
         except Exception as e:
             traceback.print_exc()
-            start_response("417 Expectation Failed",
-                           [('Content-Type', 'application/json')])
-            return [json.dumps({
-                "errorCode": "02",
-                "errorDescription": str(e),
-                "errorEvent": "COLLECT",
-                "messageID": "99999"
-            })]
+            start_response("417 Expectation Failed", [("Content-Type", "application/json")])
+            return [
+                json.dumps(
+                    {"errorCode": "02", "errorDescription": str(e), "errorEvent": "COLLECT", "messageID": "99999"}
+                )
+            ]
 
         mailbox = self.messages.setdefault(recipient, OrderedDict())
         with closing(stream_from_wsgi_environ(environ)) as stream:
             data = stream.read()
         if not data:
-            start_response("417 Expectation Failed",
-                           [('Content-Type', 'application/json')])
-            return [json.dumps({
-                "errorCode": "02",
-                "errorDescription": "Data file is missing or inaccessible.",
-                "errorEvent": "COLLECT",
-                "messageID": "99999"
-            }).encode("utf-8")]
-        headers = {_OPTIONAL_HEADERS[key]: value
-                   for key, value in environ.items()
-                   if key in _OPTIONAL_HEADERS}
+            start_response("417 Expectation Failed", [("Content-Type", "application/json")])
+            return [
+                json.dumps(
+                    {
+                        "errorCode": "02",
+                        "errorDescription": "Data file is missing or inaccessible.",
+                        "errorEvent": "COLLECT",
+                        "messageID": "99999",
+                    }
+                ).encode("utf-8")
+            ]
+        headers = {_OPTIONAL_HEADERS[key]: value for key, value in environ.items() if key in _OPTIONAL_HEADERS}
         msg_id = self.make_message_id()
-        headers['Mex-MessageID'] = msg_id
+        headers["Mex-MessageID"] = msg_id
         mailbox[msg_id] = {"headers": headers, "data": data}
         self.messages[msg_id] = mailbox[msg_id]
-        return _ok("application/json",
-                   [json.dumps({"messageID": msg_id}).encode("UTF-8")],
-                   start_response)
+        return _ok("application/json", [json.dumps({"messageID": msg_id}).encode("UTF-8")], start_response)
 
     def upload_chunk(self, chunk_msg):
         def handle(environ, start_response):
@@ -280,8 +255,8 @@ class MockMeshApplication:
             chunks = msg.setdefault("chunks", {})
             with closing(stream_from_wsgi_environ(environ)) as stream:
                 data = stream.read()
-            chunks[chunk_num] = zlib.compress(data) if not environ.get('HTTP_CONTENT_ENCODING', None) else data
-            start_response('202 Accepted', [])
+            chunks[chunk_num] = zlib.compress(data) if not environ.get("HTTP_CONTENT_ENCODING", None) else data
+            start_response("202 Accepted", [])
             return []
 
         return handle
@@ -291,22 +266,25 @@ class MockMeshApplication:
             msg = self.messages[chunk_msg]
             chunks = msg["chunks"]
             chunk = chunks[chunk_num]
-            if environ['HTTP_ACCEPT_ENCODING'] != "gzip":
+            if environ["HTTP_ACCEPT_ENCODING"] != "gzip":
                 chunk = zlib.decompress(chunk)
 
             chunk_header = "{}:{}".format(chunk_num, len(chunks) + 1)
-            start_response('200 OK', [
-                ('Content-Type', 'application/octet-stream'),
-                ('Content-Encoding', 'gzip'),
-                ('Mex-Chunk-Range', chunk_header)
-            ])
+            start_response(
+                "200 OK",
+                [
+                    ("Content-Type", "application/octet-stream"),
+                    ("Content-Encoding", "gzip"),
+                    ("Mex-Chunk-Range", chunk_header),
+                ],
+            )
             return [chunk]
 
         return handle
 
     def tracking(self, environ, start_response):
         tracking_id = shift_path_info(environ)
-        msg_id = parse_qs(environ['QUERY_STRING']).get('messageID', [None])[0]
+        msg_id = parse_qs(environ["QUERY_STRING"]).get("messageID", cast(List[str], [None]))[0]
         if tracking_id:
             message = self._find_message_by_local_id(tracking_id)
         elif msg_id:
@@ -315,39 +293,37 @@ class MockMeshApplication:
             return _bad_request(environ, start_response)
 
         if message:
-            headers = message['headers']
-            recipient = headers['Mex-To']
-            message_id = headers['Mex-MessageID']
+            headers = message["headers"]
+            recipient = headers["Mex-To"]
+            message_id = headers["Mex-MessageID"]
             acked = message_id not in self.messages[recipient]
             now = datetime.datetime.now().strftime(TIMESTAMP_FORMAT)
             response = {
                 "localId": tracking_id,
                 "dtsId": message_id,
                 "messageType": "DATA",
-                "chunkCount": len(message['chunks']),
-                "subject": headers.get('Mex-Subject'),
+                "chunkCount": len(message["chunks"]),
+                "subject": headers.get("Mex-Subject"),
                 "statusEvent": None,
                 "version": "1.0",
                 "downloadTimestamp": now,
                 "statusDescription": None,
                 "status": "Acknowledged" if acked else "Accepted",
-                "workflowId": headers.get('Mex-WorkflowID'),
-                "fileName": headers.get('Mex-FileName'),
+                "workflowId": headers.get("Mex-WorkflowID"),
+                "fileName": headers.get("Mex-FileName"),
                 "uploadTimestamp": now,
-                "recipient": headers['Mex-To'],
-                "sender": headers['Mex-From'],
+                "recipient": headers["Mex-To"],
+                "sender": headers["Mex-From"],
                 "messageId": message_id,
-                "fileSize": 0
+                "fileSize": 0,
             }
-            return _ok('application/json',
-                       [json.dumps(response).encode('UTF-8')],
-                       start_response)
+            return _ok("application/json", [json.dumps(response).encode("UTF-8")], start_response)
         else:
             return _not_found(environ, start_response)
 
     def _find_message_by_local_id(self, local_id):
         for message in self.messages.values():
-            if message.get('headers', {}).get('Mex-LocalID') == local_id:
+            if message.get("headers", {}).get("Mex-LocalID") == local_id:
                 return message
         else:
             return None
@@ -359,19 +335,17 @@ class MockMeshApplication:
             return _not_found(environ, start_response)
         result = {
             "query_id": "{ts:%Y%m%d%H%M%S%f}_{rnd:06x}_{ts:%s}".format(
-                ts=datetime.datetime.now(),
-                rnd=random.randint(0, 0xffffff)),
+                ts=datetime.datetime.now(), rnd=random.randint(0, 0xFFFFFF)
+            ),
             "results": [
                 {
                     "address": "{}HC001".format(org_code),
                     "description": "{} {} endpoint".format(org_code, workflow_id),
-                    "endpoint_type": "MESH"
+                    "endpoint_type": "MESH",
                 }
-            ]
+            ],
         }
-        return _ok('application/json',
-                   [json.dumps(result).encode('UTF-8')],
-                   start_response)
+        return _ok("application/json", [json.dumps(result).encode("UTF-8")], start_response)
 
     def make_message_id(self):
         """
@@ -381,10 +355,7 @@ class MockMeshApplication:
         """
         n = self._msg_count
         self._msg_count += 1
-        return "{ts:%Y%m%d%H%M%S%f}_{num:06d}".format(
-            ts=datetime.datetime.now(),
-            num=n
-        )
+        return "{ts:%Y%m%d%H%M%S%f}_{num:06d}".format(ts=datetime.datetime.now(), num=n)
 
     def __enter__(self):
         self.start_server()
@@ -402,9 +373,7 @@ class MockMeshApplication:
         self.server = make_server("", 0, self, server_class=SSLWSGIServer)
         port = self.server.server_address[1]
         self.uri = "https://localhost:{}".format(port)
-        thread = Thread(
-            target=self.server.serve_forever,
-            kwargs={"poll_interval": 0.01})
+        thread = Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01})
         thread.daemon = True
         thread.start()
         return self
@@ -427,14 +396,14 @@ class MockMeshChunkRetryApplication(MockMeshApplication, object):
         self.retry_options = options
 
     def outbox(self, environ, start_response):
-        current_chunk = int(environ['HTTP_MEX_CHUNK_RANGE'].split(':')[0])
+        current_chunk = int(environ["HTTP_MEX_CHUNK_RANGE"].split(":")[0])
         if current_chunk == 1:
             self.allowed_retries = {p[0]: p[1] for p in self.retry_options}
 
         if current_chunk in self.allowed_retries:
             if self.allowed_retries[current_chunk] >= 0:
                 self.allowed_retries[current_chunk] -= 1
-                return _error("application/json", '', start_response)
+                return _error("application/json", "", start_response)
 
         return super(MockMeshChunkRetryApplication, self).outbox(environ, start_response)
 
@@ -447,10 +416,11 @@ class SlowMockMeshApplication(MockMeshApplication):
 
 _data_dir = os.path.dirname(__file__)
 default_server_context = ssl.create_default_context(
-    ssl.Purpose.CLIENT_AUTH, cafile=os.path.join(_data_dir, "ca.cert.pem"))
+    ssl.Purpose.CLIENT_AUTH, cafile=os.path.join(_data_dir, "ca.cert.pem")
+)
 default_server_context.load_cert_chain(
-    os.path.join(_data_dir, 'server.cert.pem'),
-    os.path.join(_data_dir, 'server.key.pem'))
+    os.path.join(_data_dir, "server.cert.pem"), os.path.join(_data_dir, "server.key.pem")
+)
 default_server_context.check_hostname = False
 default_server_context.verify_mode = ssl.CERT_REQUIRED
 
@@ -465,8 +435,7 @@ class SSLWSGIServer(WSGIServer, object):
 
 def main():
     print("Serving on port 8000")
-    server = make_server(
-        "", 8000, MockMeshApplication(), server_class=SSLWSGIServer)
+    server = make_server("", 8000, MockMeshApplication(), server_class=SSLWSGIServer)
     server.serve_forever(0.01)
 
 

@@ -1,33 +1,35 @@
 from __future__ import absolute_import
+
 import collections
-import warnings
-import functools
 import datetime
+import functools
 import hmac
-import pkg_resources
 import platform
-import requests
-import six
 import time
 import uuid
+import warnings
 from hashlib import sha256
 from io import BytesIO
 from itertools import chain
+
+import pkg_resources
+import requests
+import six
 from six.moves.urllib.parse import quote as q
 
-
-from .io_helpers import \
-    CombineStreams, SplitStream, GzipCompressStream, GzipDecompressStream
+from .io_helpers import (
+    CombineStreams,
+    GzipCompressStream,
+    GzipDecompressStream,
+    SplitStream,
+)
 from .key_helper import get_shared_key_from_environ
 
-MOCK_CA_CERT = pkg_resources.resource_filename('mesh_client', "ca.cert.pem")
-MOCK_CERT = pkg_resources.resource_filename('mesh_client', "client.cert.pem")
-MOCK_KEY = pkg_resources.resource_filename('mesh_client', "client.key.pem")
+MOCK_CA_CERT = pkg_resources.resource_filename("mesh_client", "ca.cert.pem")
+MOCK_CERT = pkg_resources.resource_filename("mesh_client", "client.cert.pem")
+MOCK_KEY = pkg_resources.resource_filename("mesh_client", "client.key.pem")
 
-MOCK_SSL_OPTS = {
-    "verify": MOCK_CA_CERT,
-    "cert": (MOCK_CERT, MOCK_KEY)
-}
+MOCK_SSL_OPTS = {"verify": MOCK_CA_CERT, "cert": (MOCK_CERT, MOCK_KEY)}
 """
 Usable default values for verify and cert, providing certificates and keys
 which should work with mock_server. Note that these certs will not work with
@@ -36,15 +38,15 @@ NHS Digital.
 """
 default_ssl_opts = MOCK_SSL_OPTS
 
-INT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-int-ca-bundle.pem")
-DEV_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-dev-ca-bundle.pem")
-DEP_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-dep-ca-bundle.pem")
-TRAIN_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-train-ca-bundle.pem")
-LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-live-root-ca.pem")
-OPENTEST_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-opt-ca-bundle.pem")
-DIGICERT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-digicert-ca-bundle.pem")
-IG_INT_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-ig-int-ca-bundle.pem")
-IG_LIVE_CA_CERT = pkg_resources.resource_filename('mesh_client', "nhs-ig-live-ca-bundle.pem")
+INT_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-int-ca-bundle.pem")
+DEV_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-dev-ca-bundle.pem")
+DEP_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-dep-ca-bundle.pem")
+TRAIN_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-train-ca-bundle.pem")
+LIVE_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-live-root-ca.pem")
+OPENTEST_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-opt-ca-bundle.pem")
+DIGICERT_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-digicert-ca-bundle.pem")
+IG_INT_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-ig-int-ca-bundle.pem")
+IG_LIVE_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-ig-live-ca-bundle.pem")
 
 
 _OPTIONAL_HEADERS = {
@@ -56,7 +58,7 @@ _OPTIONAL_HEADERS = {
     "subject": "Mex-Subject",
     "encrypted": "Mex-Content-Encrypted",
     "compressed": "Mex-Content-Compressed",
-    "checksum": "Mex-Content-Checksum"
+    "checksum": "Mex-Content-Checksum",
 }
 
 _BOOLEAN_HEADERS = {"compressed", "encrypted"}
@@ -73,20 +75,20 @@ _RECEIVE_HEADERS = {
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
 
 
-VERSION = pkg_resources.get_distribution('mesh_client').version
+VERSION = pkg_resources.get_distribution("mesh_client").version
 
 
-Endpoint = collections.namedtuple('Endpoint', ['url', 'verify', 'cert'])
-LOCAL_MOCK_ENDPOINT = Endpoint('https://localhost:8000', MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY))
-LOCAL_FAKE_ENDPOINT = Endpoint('https://localhost:8829', MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY))
-NHS_INT_ENDPOINT = Endpoint('https://msg.int.spine2.ncrs.nhs.uk', INT_CA_CERT, None)
-NHS_DEV_ENDPOINT = Endpoint('https://msg.dev.spine2.ncrs.nhs.uk', DEV_CA_CERT, None)
-NHS_DEP_ENDPOINT = Endpoint('https://msg.dep.spine2.ncrs.nhs.uk', DEP_CA_CERT, None)
-NHS_TRAIN_ENDPOINT = Endpoint('https://msg.train.spine2.ncrs.nhs.uk', TRAIN_CA_CERT, None)
-NHS_LIVE_ENDPOINT = Endpoint('https://mesh-sync.national.ncrs.nhs.uk', LIVE_CA_CERT, None)
-NHS_OPENTEST_ENDPOINT = Endpoint('https://192.168.128.11', OPENTEST_CA_CERT, None)
-NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint('https://mesh-sync.spineservices.nhs.uk', IG_LIVE_CA_CERT, None)
-NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint('https://msg.intspineservices.nhs.uk', IG_INT_CA_CERT, None)
+Endpoint = collections.namedtuple("Endpoint", ["url", "verify", "cert"])
+LOCAL_MOCK_ENDPOINT = Endpoint("https://localhost:8000", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY))
+LOCAL_FAKE_ENDPOINT = Endpoint("https://localhost:8829", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY))
+NHS_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", INT_CA_CERT, None)
+NHS_DEV_ENDPOINT = Endpoint("https://msg.dev.spine2.ncrs.nhs.uk", DEV_CA_CERT, None)
+NHS_DEP_ENDPOINT = Endpoint("https://msg.dep.spine2.ncrs.nhs.uk", DEP_CA_CERT, None)
+NHS_TRAIN_ENDPOINT = Endpoint("https://msg.train.spine2.ncrs.nhs.uk", TRAIN_CA_CERT, None)
+NHS_LIVE_ENDPOINT = Endpoint("https://mesh-sync.national.ncrs.nhs.uk", LIVE_CA_CERT, None)
+NHS_OPENTEST_ENDPOINT = Endpoint("https://192.168.128.11", OPENTEST_CA_CERT, None)
+NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", IG_LIVE_CA_CERT, None)
+NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint("https://msg.intspineservices.nhs.uk", IG_INT_CA_CERT, None)
 
 
 def deprecated(reason=None):
@@ -100,10 +102,12 @@ def deprecated(reason=None):
             msg_extra = (reason or "").strip()
             if msg_extra:
                 msg_extra = " " + msg_extra
-            message = "Call to deprecated function {}.".format(func.__name__, msg_extra)
+            message = f"Call to deprecated function {func.__name__} {msg_extra}."
             warnings.warn(message, category=DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
+
         return new_func
+
     return decorator
 
 
@@ -118,18 +122,20 @@ class MeshClient(object):
     transparently.
     """
 
-    def __init__(self,
-                 url,
-                 mailbox,
-                 password,
-                 shared_key=get_shared_key_from_environ(),
-                 cert=None,
-                 verify=None,
-                 max_chunk_size=75 * 1024 * 1024,
-                 proxies=None,
-                 transparent_compress=False,
-                 max_chunk_retries=0,
-                 timeout=10*60):
+    def __init__(
+        self,
+        url,
+        mailbox,
+        password,
+        shared_key=get_shared_key_from_environ(),
+        cert=None,
+        verify=None,
+        max_chunk_size=75 * 1024 * 1024,
+        proxies=None,
+        transparent_compress=False,
+        max_chunk_retries=0,
+        timeout=10 * 60,
+    ):
         """
         Create a new MeshClient.
 
@@ -164,28 +170,23 @@ class MeshClient(object):
         self._session = requests.Session()
         self._session.headers = {
             "User-Agent": (
-                "mesh_client;{};N/A;{};{};{} {}".format(
-                    VERSION,
-                    platform.processor() or platform.machine(),
-                    platform.system(),
-                    platform.release(),
-                    platform.version()
-                )
+                f"mesh_client;{VERSION};N/A;{platform.processor() or platform.machine()};"
+                f"{platform.system()};{platform.release()} {platform.version()}"
             ),
-            "Accept-Encoding": "gzip"
+            "Accept-Encoding": "gzip",
         }
         self._session.auth = AuthTokenGenerator(shared_key, mailbox, password)
-        if hasattr(url, 'url'):
+        if hasattr(url, "url"):
             self._url = url.url
         else:
             self._url = url
 
-        if hasattr(url, 'cert') and cert is None:
+        if hasattr(url, "cert") and cert is None:
             self._session.cert = url.cert
         else:
             self._session.cert = cert
 
-        if hasattr(url, 'verify') and verify is None:
+        if hasattr(url, "verify") and verify is None:
             self._session.verify = url.verify
         else:
             self._session.verify = verify
@@ -207,16 +208,15 @@ class MeshClient(object):
             "mex-OSArchitecture": platform.processor() or platform.machine(),
             "mex-OSName": platform.system(),
             "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
-            "mex-JavaVersion": "N/A"
+            "mex-JavaVersion": "N/A",
         }
         response = self._session.post(
-            "{}/messageexchange/{}".format(self._url, q(self._mailbox)), headers=headers,
-            timeout=self._timeout
+            "{}/messageexchange/{}".format(self._url, q(self._mailbox)), headers=headers, timeout=self._timeout
         )
 
         response.raise_for_status()
 
-        return b'hello'
+        return b"hello"
 
     @deprecated("this api endpoint is marked as deprecated")
     def count_messages(self):
@@ -224,8 +224,8 @@ class MeshClient(object):
         Count all messages in user's inbox. Returns an integer
         """
         response = self._session.get(
-            "{}/messageexchange/{}/count".format(self._url, q(self._mailbox)),
-            timeout=self._timeout)
+            "{}/messageexchange/{}/count".format(self._url, q(self._mailbox)), timeout=self._timeout
+        )
         response.raise_for_status()
         return response.json()["count"]
 
@@ -247,12 +247,17 @@ class MeshClient(object):
         Returns a dictionary, in much the same format that MESH provides it.
         """
         if (tracking_id is not None) + (message_id is not None) != 1:
-            raise ValueError("Exactly one of local message id (called tracking_id, for historical reasons) and message_id must be provided")
+            raise ValueError(
+                "Exactly one of local message id (called tracking_id, for historical reasons) "
+                "and message_id must be provided"
+            )
 
         if tracking_id:
             url = "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, q(self._mailbox), q(tracking_id))
         else:
-            url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, q(self._mailbox), q(message_id))
+            url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(
+                self._url, q(self._mailbox), q(message_id)
+            )
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
@@ -265,7 +270,8 @@ class MeshClient(object):
         """
         response = self._session.get(
             "{}/endpointlookup/mesh/{}/{}".format(self._url, q(organisation_code), q(workflow_id)),
-            timeout=self._timeout)
+            timeout=self._timeout,
+        )
         response.raise_for_status()
         return response.json()
 
@@ -274,8 +280,8 @@ class MeshClient(object):
         List all messages in user's inbox. Returns a list of message_ids
         """
         response = self._session.get(
-            "{}/messageexchange/{}/inbox".format(self._url, q(self._mailbox)),
-            timeout=self._timeout)
+            "{}/messageexchange/{}/inbox".format(self._url, q(self._mailbox)), timeout=self._timeout
+        )
         response.raise_for_status()
         return response.json()["messages"]
 
@@ -288,7 +294,8 @@ class MeshClient(object):
         response = self._session.get(
             "{}/messageexchange/{}/inbox/{}".format(self._url, q(self._mailbox), q(message_id)),
             stream=True,
-            timeout=self._timeout)
+            timeout=self._timeout,
+        )
         response.raise_for_status()
         return Message(message_id, response, self)
 
@@ -296,17 +303,12 @@ class MeshClient(object):
         response = self._session.get(
             "{}/messageexchange/{}/inbox/{}/{}".format(self._url, q(self._mailbox), q(message_id), chunk_num),
             stream=True,
-            timeout=self._timeout)
+            timeout=self._timeout,
+        )
         response.raise_for_status()
         return response
 
-    def send_message(
-         self,
-         recipient,
-         data,
-         max_chunk_size = None,
-         **kwargs
-    ):
+    def send_message(self, recipient, data, max_chunk_size=None, **kwargs):
         """
         Send a message to recipient containing data.
 
@@ -337,30 +339,32 @@ class MeshClient(object):
         compression for sending is enabled as a constructor option.
         """
         transparent_compress = self._transparent_compress
-        maybe_compressed = (
-            lambda stream: GzipCompressStream(
-                stream) if transparent_compress else stream
-        )
+
+        def maybe_compressed(maybe_compress: bytes):
+            if not transparent_compress:
+                return maybe_compress
+            return GzipCompressStream(maybe_compress)
+
         headers = {
             "Mex-From": self._mailbox,
             "Mex-To": recipient,
-            "Mex-MessageType": 'DATA',
-            "Mex-Version": '1.0',
+            "Mex-MessageType": "DATA",
+            "Mex-Version": "1.0",
             "Content-Type": "application/octet-stream",
         }
 
         for key, value in kwargs.items():
             if key in _OPTIONAL_HEADERS:
                 if key in _BOOLEAN_HEADERS:
-                    value = 'Y' if value else 'N'
+                    value = "Y" if value else "N"
                 headers[_OPTIONAL_HEADERS[key]] = str(value)
             else:
-                raise TypeError("Unrecognised keyword argument {key}."
-                                " optional arguments are: {args}".format(
-                                    key=key,
-                                    args=", ".join([
-                                        "recipient", "data"
-                                    ] + list(_OPTIONAL_HEADERS.keys()))))
+                raise TypeError(
+                    "Unrecognised keyword argument {key}."
+                    " optional arguments are: {args}".format(
+                        key=key, args=", ".join(["recipient", "data"] + list(_OPTIONAL_HEADERS.keys()))
+                    )
+                )
 
         if transparent_compress:
             headers["Mex-Content-Compress"] = "Y"
@@ -376,7 +380,8 @@ class MeshClient(object):
             "{}/messageexchange/{}/outbox".format(self._url, q(self._mailbox)),
             data=chunk1,
             headers=headers,
-            timeout=self._timeout)
+            timeout=self._timeout,
+        )
         # MESH server dumps XML SOAP output on internal server error
         if response1.status_code >= 500:
             response1.raise_for_status()
@@ -389,7 +394,7 @@ class MeshClient(object):
             data = maybe_compressed(chunk)
 
             if self._max_chunk_retries > 0:
-                if hasattr(data, 'read'):
+                if hasattr(data, "read"):
                     data = data.read()
                 buf = BytesIO(data)
             else:
@@ -414,16 +419,17 @@ class MeshClient(object):
                 time.sleep(i**2)
 
                 response = self._session.post(
-                    "{}/messageexchange/{}/outbox/{}/{}".format(
-                        self._url, q(self._mailbox), q(message_id), chunk_num),
+                    "{}/messageexchange/{}/outbox/{}/{}".format(self._url, q(self._mailbox), q(message_id), chunk_num),
                     data=buf,
                     headers=headers,
-                    timeout=self._timeout)
+                    timeout=self._timeout,
+                )
 
                 # check other successful response codes
                 if response.status_code == 200 or response.status_code == 202:
                     break
             else:
+                assert response
                 response.raise_for_status()
 
         return message_id
@@ -434,9 +440,9 @@ class MeshClient(object):
         """
         message_id = getattr(message_id, "_msg_id", message_id)
         response = self._session.put(
-            "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(
-                self._url, q(self._mailbox), q(message_id)),
-            timeout=self._timeout)
+            "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(self._url, q(self._mailbox), q(message_id)),
+            timeout=self._timeout,
+        )
         response.raise_for_status()
 
     def iterate_all_messages(self):
@@ -513,7 +519,7 @@ class Message(object):
         headers = response.headers
         for key, value in six.iteritems(headers):
             lkey = key.lower()
-            if lkey.startswith('mex-'):
+            if lkey.startswith("mex-"):
                 self._mex_headers[lkey[4:]] = value
 
         for key, value in _RECEIVE_HEADERS.items():
@@ -524,14 +530,14 @@ class Message(object):
             setattr(self, key, header_value)
         chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
         maybe_decompress = (
-            lambda resp:
-            GzipDecompressStream(resp.raw)
-            if resp.headers.get("Content-Encoding") == "gzip" else resp.raw
+            lambda resp: GzipDecompressStream(resp.raw) if resp.headers.get("Content-Encoding") == "gzip" else resp.raw
         )
         self._response = CombineStreams(
-            chain([maybe_decompress(response)], (maybe_decompress(
-                client.retrieve_message_chunk(msg_id, str(
-                    i + 2))) for i in range(chunk_count - 1))))
+            chain(
+                [maybe_decompress(response)],
+                (maybe_decompress(client.retrieve_message_chunk(msg_id, str(i + 2))) for i in range(chunk_count - 1)),
+            )
+        )
 
     def id(self):
         """return the message id
@@ -566,7 +572,7 @@ class Message(object):
             try:
                 self._response.close()
             finally:
-                self._response = None
+                self._response = None  # type: ignore[assignment]
 
     def acknowledge(self):
         """
@@ -575,7 +581,7 @@ class Message(object):
         self._client.acknowledge_message(self._msg_id)
 
     def mex_header(self, key, default=None):
-        """ get a mex header if present
+        """get a mex header if present
 
         Args:
             key (str): key
@@ -607,7 +613,6 @@ class Message(object):
 
 
 class AuthTokenGenerator(object):
-
     def __init__(self, key, mailbox, password):
         self._key = key
         self._mailbox = mailbox
@@ -619,7 +624,7 @@ class AuthTokenGenerator(object):
         token = self.generate_token()
         if r is not None:
             # This is being used as a Requests auth handler
-            r.headers['Authorization'] = token
+            r.headers["Authorization"] = token
             return r
         else:
             # This is being used in its legacy capacity
@@ -627,12 +632,9 @@ class AuthTokenGenerator(object):
 
     def generate_token(self):
         now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M")
-        public_auth_data = _combine(self._mailbox, self._nonce,
-                                    self._nonce_count, now)
-        private_auth_data = _combine(self._mailbox, self._nonce,
-                                     self._nonce_count, self._password, now)
-        myhash = hmac.HMAC(self._key, private_auth_data.encode("ASCII"),
-                           sha256).hexdigest()
+        public_auth_data = _combine(self._mailbox, self._nonce, self._nonce_count, now)
+        private_auth_data = _combine(self._mailbox, self._nonce, self._nonce_count, self._password, now)
+        myhash = hmac.HMAC(self._key, private_auth_data.encode("ASCII"), sha256).hexdigest()
         self._nonce_count += 1
         return "NHSMESH {public_auth_data}:{myhash}".format(**locals())
 

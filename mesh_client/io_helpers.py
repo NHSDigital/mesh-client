@@ -1,15 +1,18 @@
 from __future__ import division
+
 import io
 import os
-import six
 import warnings
 import zlib
+
+import six
 
 
 class IteratorMixin(object):
     """
     Produce a series of lines, from a readable that only exposes a `read` method
     """
+
     __block_size = 65536
     __line_iterator = None
 
@@ -17,7 +20,7 @@ class IteratorMixin(object):
         # We use a BytesIO as our buffer, so we can piggyback on its readlines method
         buff = io.BytesIO()
         while True:
-            block = self.read(self.__block_size)
+            block = self.read(self.__block_size)  # type: ignore[attr-defined]
             buff.write(block)
             last_block = len(block) == 0
             buff.seek(0)
@@ -38,7 +41,7 @@ class IteratorMixin(object):
         try:
             return six.next(self.__line_iterator)
         except StopIteration:
-            return b''
+            return b""
 
     def readlines(self):
         return list(iter(self))
@@ -47,29 +50,28 @@ class IteratorMixin(object):
 class CloseUnderlyingMixin(object):
     def close(self):
         try:
-            if hasattr(self._underlying, "close"):
-                self._underlying.close()
+            if hasattr(self._underlying, "close"):  # type: ignore[has-type]
+                self._underlying.close()  # type: ignore[has-type]
         finally:
             self._underlying = None
             if hasattr(super(CloseUnderlyingMixin, self), "close"):
-                super(CloseUnderlyingMixin, self).close()
+                super(CloseUnderlyingMixin, self).close()  # type: ignore[misc]
 
     def __del__(self):
         self.close()
         if hasattr(super(CloseUnderlyingMixin, self), "__del__"):
-            super(CloseUnderlyingMixin, self).__del__()
+            super(CloseUnderlyingMixin, self).__del__()  # type: ignore[misc]
 
     def __enter__(self):
         if hasattr(super(CloseUnderlyingMixin, self), "__enter__"):
-            return super(CloseUnderlyingMixin, self).__enter__()
+            return super(CloseUnderlyingMixin, self).__enter__()  # type: ignore[misc]
         else:
             return self
 
     def __exit__(self, typ, value, traceback):
         self.close()
         if hasattr(super(CloseUnderlyingMixin, self), "__exit__"):
-            return super(CloseUnderlyingMixin, self).__exit__(typ, value,
-                                                              traceback)
+            return super(CloseUnderlyingMixin, self).__exit__(typ, value, traceback)  # type: ignore[misc]
 
 
 class AbstractGzipStream(IteratorMixin, CloseUnderlyingMixin):
@@ -130,9 +132,7 @@ class GzipCompressStream(AbstractGzipStream):
     def __init__(self, underlying, block_size=65536):
         AbstractGzipStream.__init__(self, underlying, block_size)
         self._compress_obj = zlib.compressobj(
-            9,  # level
-            zlib.DEFLATED,  # method
-            31  # wbits - gzip header, maximum window
+            9, zlib.DEFLATED, 31  # level  # method  # wbits - gzip header, maximum window
         )
 
     def _process_block(self, block):
@@ -150,9 +150,7 @@ class GzipDecompressStream(AbstractGzipStream):
 
     def __init__(self, underlying, block_size=65536):
         AbstractGzipStream.__init__(self, underlying, block_size)
-        self._decompress_obj = zlib.decompressobj(
-            47  # wbits - detect header, maximum window
-        )
+        self._decompress_obj = zlib.decompressobj(47)  # wbits - detect header, maximum window
 
     def _process_block(self, block):
         return self._decompress_obj.decompress(block)
@@ -184,18 +182,17 @@ class SplitStream(CloseUnderlyingMixin):
         self._remaining = 0
 
     def __len__(self):
-        return max(1,
-                   (self._length + self._chunk_size - 1) // self._chunk_size)
+        return max(1, (self._length + self._chunk_size - 1) // self._chunk_size)
 
     def __iter__(self):
         for i in range(len(self)):
             if self._remaining > 0:
                 warnings.warn(
-                    "moving to next chunk, despite unread content in buffer "
-                    "- existing chunk will become invalid")
+                    "moving to next chunk, despite unread content in buffer " "- existing chunk will become invalid"
+                )
+                assert self._underlying
                 self._underlying.read(self._remaining)
-            self._remaining = min(self._chunk_size,
-                                  self._length - i * self._chunk_size)
+            self._remaining = min(self._chunk_size, self._length - i * self._chunk_size)
             yield _SplitChunk(self)
 
 
@@ -247,7 +244,7 @@ class CombineStreams(IteratorMixin):
     def _close_current_stream(self):
         try:
             self._current_stream.close()
-        except:
+        except:  # noqa: E722
             pass
 
 
@@ -261,6 +258,7 @@ class FiniteLengthStream(IteratorMixin, CloseUnderlyingMixin):
             n = self._remaining
         n = min(n, self._remaining)
         try:
+            assert self._underlying
             return self._underlying.read(n)
         finally:
             self._remaining -= n
@@ -306,8 +304,7 @@ class ChunkedStream(IteratorMixin, CloseUnderlyingMixin):
 
 def stream_from_wsgi_environ(environ):
     if environ.get("CONTENT_LENGTH"):
-        return FiniteLengthStream(environ["wsgi.input"],
-                                  int(environ["CONTENT_LENGTH"]))
+        return FiniteLengthStream(environ["wsgi.input"], int(environ["CONTENT_LENGTH"]))
     elif environ.get("HTTP_TRANSFER_ENCODING") == "chunked":
         return ChunkedStream(environ["wsgi.input"])
     else:

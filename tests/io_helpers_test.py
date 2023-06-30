@@ -4,7 +4,6 @@ import gzip
 import io
 import tempfile
 from contextlib import closing
-from unittest import TestCase, main
 from urllib.parse import urljoin
 from urllib.request import pathname2url, urlopen
 
@@ -48,265 +47,276 @@ aaaaaa
 """
 
 
-class IOHelpersTest(TestCase):
-    def test_gzip_compress_stream(self):
-        underlying = io.BytesIO(b"This is a short test stream")
-        instance = GzipCompressStream(underlying, block_size=4)
-        result = b""
-        for i in range(1000):
-            read_result = instance.read(i)
-            result += read_result
-            if len(read_result) < i:
-                break
-        self.assertEqual(b"", instance.read(10))
-        self.assertEqual(b"", instance.read())
+def test_gzip_compress_stream():
+    underlying = io.BytesIO(b"This is a short test stream")
+    instance = GzipCompressStream(underlying, block_size=4)
+    result = b""
+    for i in range(1000):
+        read_result = instance.read(i)
+        result += read_result
+        if len(read_result) < i:
+            break
+    assert instance.read(10) == b""
+    assert instance.read() == b""
 
-        # Decode with GzipFile
-        test_decoder = gzip.GzipFile("", mode="r", fileobj=io.BytesIO(result))
-        self.assertEqual(b"This is a short test stream", test_decoder.read())
+    # Decode with GzipFile
+    test_decoder = gzip.GzipFile("", mode="r", fileobj=io.BytesIO(result))
+    assert test_decoder.read() == b"This is a short test stream"
 
-    def test_gzip_compress_stream_read_all(self):
-        underlying = io.BytesIO(b"This is a short test stream")
-        instance = GzipCompressStream(underlying, block_size=4)
-        result = instance.read()
-        self.assertEqual(b"", instance.read(10))
-        self.assertEqual(b"", instance.read())
 
-        # Decode with GzipFile
-        test_decoder = gzip.GzipFile("", mode="r", fileobj=io.BytesIO(result))
-        self.assertEqual(b"This is a short test stream", test_decoder.read())
+def test_gzip_compress_stream_read_all():
+    underlying = io.BytesIO(b"This is a short test stream")
+    instance = GzipCompressStream(underlying, block_size=4)
+    result = instance.read()
+    assert instance.read(10) == b""
+    assert instance.read() == b""
 
-    def test_gzip_decompress_stream(self):
-        underlying = io.BytesIO()
-        gzwriter = gzip.GzipFile(fileobj=underlying, mode="w")
-        gzwriter.write(b"This is a short test stream")
-        gzwriter.close()
-        underlying.seek(0)
+    # Decode with GzipFile
+    test_decoder = gzip.GzipFile("", mode="r", fileobj=io.BytesIO(result))
+    assert test_decoder.read() == b"This is a short test stream"
 
-        instance = GzipDecompressStream(underlying, block_size=4)
-        result = b""
-        for i in range(1000):
-            read_result = instance.read(i)
-            result += read_result
-            if len(read_result) < i:
-                break
-        self.assertEqual(b"", instance.read(10))
-        self.assertEqual(b"", instance.read())
 
-        self.assertEqual(b"This is a short test stream", result)
+def test_gzip_decompress_stream():
+    underlying = io.BytesIO()
+    gzwriter = gzip.GzipFile(fileobj=underlying, mode="w")
+    gzwriter.write(b"This is a short test stream")
+    gzwriter.close()
+    underlying.seek(0)
 
-    def test_gzip_decompress_stream_read_all(self):
-        underlying = io.BytesIO()
-        gzwriter = gzip.GzipFile(fileobj=underlying, mode="w")
-        gzwriter.write(b"This is a short test stream")
-        gzwriter.close()
-        underlying.seek(0)
+    instance = GzipDecompressStream(underlying, block_size=4)
+    result = b""
+    for i in range(1000):
+        read_result = instance.read(i)
+        result += read_result
+        if len(read_result) < i:
+            break
+    assert instance.read(10) == b""
+    assert instance.read() == b""
 
-        instance = GzipDecompressStream(underlying, block_size=4)
-        result = instance.read()
-        self.assertEqual(b"", instance.read(10))
-        self.assertEqual(b"", instance.read())
+    assert result == b"This is a short test stream"
 
-        self.assertEqual(b"This is a short test stream", result)
 
-    def test_split_file(self):
-        with tempfile.TemporaryFile() as f:
-            f.write(b"a" * mebibyte)
-            f.write(b"b" * mebibyte)
-            f.flush()
-            f.seek(0)
-            instance = SplitStream(f, mebibyte)
-            self.assertEqual(len(instance), 2)
-            for m, c in izip(instance, [b"a", b"b"]):
-                self.assertEqual(m.read(mebibyte), c * mebibyte)
+def test_gzip_decompress_stream_read_all():
+    underlying = io.BytesIO()
+    gzwriter = gzip.GzipFile(fileobj=underlying, mode="w")
+    gzwriter.write(b"This is a short test stream")
+    gzwriter.close()
+    underlying.seek(0)
 
-    def test_split_file_irregular_size(self):
-        with tempfile.TemporaryFile() as f:
-            f.write(b"a" * mebibyte)
-            f.write(b"b")
-            f.flush()
-            f.seek(0)
-            instance = SplitStream(f, mebibyte)
-            self.assertEqual(len(instance), 2)
-            iterator = iter(instance)
-            chunk1 = next(iterator)
-            self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
-            chunk2 = next(iterator)
-            self.assertEqual(b"b", chunk2.read(mebibyte))
+    instance = GzipDecompressStream(underlying, block_size=4)
+    result = instance.read()
+    assert instance.read(10) == b""
+    assert instance.read() == b""
 
-    def test_split_file_irregular_size_2(self):
-        with tempfile.TemporaryFile() as f:
-            f.write(b"a" * mebibyte)
-            f.write(b"b" * (mebibyte - 1))
-            f.flush()
-            f.seek(0)
-            instance = SplitStream(f, mebibyte)
-            self.assertEqual(len(instance), 2)
-            iterator = iter(instance)
-            chunk1 = next(iterator)
-            self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
-            chunk2 = next(iterator)
-            self.assertEqual(b"b" * (mebibyte - 1), chunk2.read(mebibyte))
+    assert result == b"This is a short test stream"
 
-    def test_split_url(self):
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(b"a" * mebibyte)
-            f.write(b"b" * mebibyte)
-            f.flush()
-            with closing(urlopen(path2url(f.name))) as stream:
-                instance = SplitStream(stream, mebibyte)
-                self.assertEqual(len(instance), 2)
-                for m, c in izip(instance, [b"a", b"b"]):
-                    self.assertEqual(m.read(mebibyte), c * mebibyte)
 
-    def test_split_url_irregular_size(self):
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(b"a" * mebibyte)
-            f.write(b"b")
-            f.flush()
-            with closing(urlopen(path2url(f.name))) as stream:
-                instance = SplitStream(stream, mebibyte)
-                self.assertEqual(len(instance), 2)
-                iterator = iter(instance)
-                chunk1 = next(iterator)
-                self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
-                chunk2 = next(iterator)
-                self.assertEqual(b"b", chunk2.read(mebibyte))
-
-    def test_split_url_irregular_size_2(self):
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(b"a" * mebibyte)
-            f.write(b"b" * (mebibyte - 1))
-            f.flush()
-            with closing(urlopen(path2url(f.name))) as stream:
-                instance = SplitStream(stream, mebibyte)
-                self.assertEqual(len(instance), 2)
-                iterator = iter(instance)
-                chunk1 = next(iterator)
-                self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
-                chunk2 = next(iterator)
-                self.assertEqual(b"b" * (mebibyte - 1), chunk2.read(mebibyte))
-
-    def test_split_bytes(self):
-        instance = SplitStream(b"a" * small_chunk + b"b" * small_chunk, small_chunk)
-        self.assertEqual(len(instance), 2)
+def test_split_file():
+    with tempfile.TemporaryFile() as f:
+        f.write(b"a" * mebibyte)
+        f.write(b"b" * mebibyte)
+        f.flush()
+        f.seek(0)
+        instance = SplitStream(f, mebibyte)
+        assert len(instance) == 2
         for m, c in izip(instance, [b"a", b"b"]):
-            self.assertEqual(c * small_chunk, m.read(small_chunk))
+            assert m.read(mebibyte) == c * mebibyte
 
-    def test_split_bytes_irregular_size(self):
-        instance = SplitStream(b"a" * small_chunk + b"b", small_chunk)
-        self.assertEqual(len(instance), 2)
+
+def test_split_file_irregular_size():
+    with tempfile.TemporaryFile() as f:
+        f.write(b"a" * mebibyte)
+        f.write(b"b")
+        f.flush()
+        f.seek(0)
+        instance = SplitStream(f, mebibyte)
+        assert len(instance) == 2
         iterator = iter(instance)
         chunk1 = next(iterator)
-        self.assertEqual(b"a" * small_chunk, chunk1.read(small_chunk))
+        assert chunk1.read(mebibyte) == b"a" * mebibyte
         chunk2 = next(iterator)
-        self.assertEqual(b"b", chunk2.read(small_chunk))
+        assert chunk2.read(mebibyte) == b"b"
 
-    def test_split_bytes_irregular_size_2(self):
-        instance = SplitStream(b"a" * small_chunk + b"b" * (small_chunk - 1), small_chunk)
-        self.assertEqual(len(instance), 2)
+
+def test_split_file_irregular_size_2():
+    with tempfile.TemporaryFile() as f:
+        f.write(b"a" * mebibyte)
+        f.write(b"b" * (mebibyte - 1))
+        f.flush()
+        f.seek(0)
+        instance = SplitStream(f, mebibyte)
+        assert len(instance) == 2
         iterator = iter(instance)
         chunk1 = next(iterator)
-        self.assertEqual(b"a" * small_chunk, chunk1.read(small_chunk))
+        assert chunk1.read(mebibyte) == b"a" * mebibyte
         chunk2 = next(iterator)
-        self.assertEqual(b"b" * (small_chunk - 1), chunk2.read(small_chunk))
-
-    def test_split_combine_stream_misaligned_with_chunk_size_1(self):
-        instance = SplitStream(
-            dict(Body=CombineStreams([io.BytesIO(b"1234"), io.BytesIO(b"567890123456789")]), ContentLength=19), 5
-        )
-        self.assertEqual(len(instance), 4)
-        iterator = iter(instance)
-        chunk1 = next(iterator)
-        self.assertEqual(b"12345", chunk1.read(5))
-        chunk2 = next(iterator)
-        self.assertEqual(b"67890", chunk2.read(5))
-        chunk3 = next(iterator)
-        self.assertEqual(b"12345", chunk3.read(5))
-        chunk4 = next(iterator)
-        self.assertEqual(b"6789", chunk4.read(5))
-
-    def test_split_combine_stream_misaligned_with_chunk_size_2(self):
-        instance = SplitStream(
-            dict(Body=CombineStreams([io.BytesIO(b"123456789"), io.BytesIO(b"012345678")]), ContentLength=18), 5
-        )
-        self.assertEqual(len(instance), 4)
-        iterator = iter(instance)
-        chunk1 = next(iterator)
-        self.assertEqual(b"12345", chunk1.read(5))
-        chunk2 = next(iterator)
-        self.assertEqual(b"67890", chunk2.read(5))
-        chunk3 = next(iterator)
-        self.assertEqual(b"12345", chunk3.read(5))
-        chunk4 = next(iterator)
-        self.assertEqual(b"678", chunk4.read(5))
-
-    def test_split_combine_stream_misaligned_with_chunk_size_3(self):
-        instance = SplitStream(
-            dict(
-                Body=CombineStreams([io.BytesIO(b"123"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
-                ContentLength=12,
-            ),
-            5,
-        )
-        self.assertEqual(len(instance), 3)
-        iterator = iter(instance)
-        chunk1 = next(iterator)
-        self.assertEqual(b"12345", chunk1.read(5))
-        chunk2 = next(iterator)
-        self.assertEqual(b"67890", chunk2.read(5))
-        chunk3 = next(iterator)
-        self.assertEqual(b"12", chunk3.read(5))
-
-    def test_combine_streams(self):
-        instance = CombineStreams(io.BytesIO(b"Hello") for i in range(20))
-        result = b""
-        for i in range(1000):
-            read_result = instance.read(i)
-            result += read_result
-            if len(read_result) < i:
-                break
-
-        self.assertEqual(instance.read(10), b"")
-        self.assertEqual(instance.read(), b"")
-        self.assertEqual(result, b"Hello" * 20)
-
-    def test_combine_streams_readall(self):
-        instance = CombineStreams(io.BytesIO(b"Hello") for i in range(20))
-        result = instance.read()
-
-        self.assertEqual(instance.read(10), b"")
-        self.assertEqual(instance.read(), b"")
-        self.assertEqual(result, b"Hello" * 20)
-
-    def test_iterator_mixin(self):
-        # import pudb
-        # pu.db
-        instance = FakeMixinUser(MIXIN_DATA, 4)
-        self.assertEqual(b"a\n", instance.readline())
-        self.assertEqual(b"aa\n", instance.readline())
-        self.assertEqual(b"aaa\n", instance.readline())
-        self.assertEqual(b"aaaa\n", instance.readline())
-        self.assertEqual(b"aaaaa\n", instance.readline())
-        self.assertEqual(b"aaaaaa\n", instance.readline())
-        self.assertEqual(b"", instance.readline())
-
-    def test_iterator_mixin_list(self):
-        # import pudb
-        # pu.db
-        instance = FakeMixinUser(MIXIN_DATA, 4)
-        self.assertEqual(
-            [
-                b"a\n",
-                b"aa\n",
-                b"aaa\n",
-                b"aaaa\n",
-                b"aaaaa\n",
-                b"aaaaaa\n",
-            ],
-            instance.readlines(),
-        )
+        assert chunk2.read(mebibyte) == b"b" * (mebibyte - 1)
 
 
-if __name__ == "__main__":
-    main()
+def test_split_url():
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(b"a" * mebibyte)
+        f.write(b"b" * mebibyte)
+        f.flush()
+        with closing(urlopen(path2url(f.name))) as stream:
+            instance = SplitStream(stream, mebibyte)
+            assert len(instance) == 2
+            for m, c in izip(instance, [b"a", b"b"]):
+                assert m.read(mebibyte) == c * mebibyte
+
+
+def test_split_url_irregular_size():
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(b"a" * mebibyte)
+        f.write(b"b")
+        f.flush()
+        with closing(urlopen(path2url(f.name))) as stream:
+            instance = SplitStream(stream, mebibyte)
+            assert len(instance) == 2
+            iterator = iter(instance)
+            chunk1 = next(iterator)
+            assert chunk1.read(mebibyte) == b"a" * mebibyte
+            chunk2 = next(iterator)
+            assert chunk2.read(mebibyte) == b"b"
+
+
+def test_split_url_irregular_size_2():
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(b"a" * mebibyte)
+        f.write(b"b" * (mebibyte - 1))
+        f.flush()
+        with closing(urlopen(path2url(f.name))) as stream:
+            instance = SplitStream(stream, mebibyte)
+            assert len(instance) == 2
+            iterator = iter(instance)
+            chunk1 = next(iterator)
+            assert chunk1.read(mebibyte) == b"a" * mebibyte
+            chunk2 = next(iterator)
+            assert chunk2.read(mebibyte) == b"b" * (mebibyte - 1)
+
+
+def test_split_bytes():
+    instance = SplitStream(b"a" * small_chunk + b"b" * small_chunk, small_chunk)
+    assert len(instance) == 2
+    for m, c in izip(instance, [b"a", b"b"]):
+        assert m.read(small_chunk) == c * small_chunk
+
+
+def test_split_bytes_irregular_size():
+    instance = SplitStream(b"a" * small_chunk + b"b", small_chunk)
+    assert len(instance) == 2
+    iterator = iter(instance)
+    chunk1 = next(iterator)
+    assert chunk1.read(small_chunk) == b"a" * small_chunk
+    chunk2 = next(iterator)
+    assert chunk2.read(small_chunk) == b"b"
+
+
+def test_split_bytes_irregular_size_2():
+    instance = SplitStream(b"a" * small_chunk + b"b" * (small_chunk - 1), small_chunk)
+    assert len(instance) == 2
+    iterator = iter(instance)
+    chunk1 = next(iterator)
+    assert chunk1.read(small_chunk) == b"a" * small_chunk
+    chunk2 = next(iterator)
+    assert chunk2.read(small_chunk) == b"b" * (small_chunk - 1)
+
+
+def test_split_combine_stream_misaligned_with_chunk_size_1():
+    instance = SplitStream(
+        dict(Body=CombineStreams([io.BytesIO(b"1234"), io.BytesIO(b"567890123456789")]), ContentLength=19), 5
+    )
+    assert len(instance) == 4
+    iterator = iter(instance)
+    chunk1 = next(iterator)
+    assert chunk1.read(5) == b"12345"
+    chunk2 = next(iterator)
+    assert chunk2.read(5) == b"67890"
+    chunk3 = next(iterator)
+    assert chunk3.read(5) == b"12345"
+    chunk4 = next(iterator)
+    assert chunk4.read(5) == b"6789"
+
+
+def test_split_combine_stream_misaligned_with_chunk_size_2():
+    instance = SplitStream(
+        dict(Body=CombineStreams([io.BytesIO(b"123456789"), io.BytesIO(b"012345678")]), ContentLength=18), 5
+    )
+    assert len(instance) == 4
+    iterator = iter(instance)
+    chunk1 = next(iterator)
+    assert chunk1.read(5) == b"12345"
+    chunk2 = next(iterator)
+    assert chunk2.read(5) == b"67890"
+    chunk3 = next(iterator)
+    assert chunk3.read(5) == b"12345"
+    chunk4 = next(iterator)
+    assert chunk4.read(5) == b"678"
+
+
+def test_split_combine_stream_misaligned_with_chunk_size_3():
+    instance = SplitStream(
+        dict(
+            Body=CombineStreams([io.BytesIO(b"123"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
+            ContentLength=12,
+        ),
+        5,
+    )
+    assert len(instance) == 3
+    iterator = iter(instance)
+    chunk1 = next(iterator)
+    assert chunk1.read(5) == b"12345"
+    chunk2 = next(iterator)
+    assert chunk2.read(5) == b"67890"
+    chunk3 = next(iterator)
+    assert chunk3.read(5) == b"12"
+
+
+def test_combine_streams():
+    instance = CombineStreams(io.BytesIO(b"Hello") for i in range(20))
+    result = b""
+    for i in range(1000):
+        read_result = instance.read(i)
+        result += read_result
+        if len(read_result) < i:
+            break
+
+    assert instance.read(10) == b""
+    assert instance.read() == b""
+    assert result == b"Hello" * 20
+
+
+def test_combine_streams_readall():
+    instance = CombineStreams(io.BytesIO(b"Hello") for i in range(20))
+    result = instance.read()
+
+    assert instance.read(10) == b""
+    assert instance.read() == b""
+    assert result == b"Hello" * 20
+
+
+def test_iterator_mixin():
+    # import pudb
+    # pu.db
+    instance = FakeMixinUser(MIXIN_DATA, 4)
+    assert instance.readline() == b"a\n"
+    assert instance.readline() == b"aa\n"
+    assert instance.readline() == b"aaa\n"
+    assert instance.readline() == b"aaaa\n"
+    assert instance.readline() == b"aaaaa\n"
+    assert instance.readline() == b"aaaaaa\n"
+    assert instance.readline() == b""
+
+
+def test_iterator_mixin_list():
+    # import pudb
+    # pu.db
+    instance = FakeMixinUser(MIXIN_DATA, 4)
+    assert instance.readlines() == [
+        b"a\n",
+        b"aa\n",
+        b"aaa\n",
+        b"aaaa\n",
+        b"aaaaa\n",
+        b"aaaaaa\n",
+    ]

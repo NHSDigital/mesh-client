@@ -2,7 +2,7 @@ name: merge-develop
 on:
   push:
     branches:
-      - develop
+      - mm-mesh-1478-move-to-pyproject-toml
 
 jobs:
 
@@ -15,75 +15,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: setup python
-        uses: actions/setup-python@v3
-        with:
-          python-version: "3.8"
 
-      - name: setup poetry
-        uses: abatilo/actions-poetry@v2
-        with:
-          poetry-version: 1.5.1
+      - name: print env vars
+        run: printenv
 
-      - name: add poetry plugins
-        run: |
-          poetry self add "poetry-dynamic-versioning[plugin]"
-
-      - name: cache virtualenv
-        uses: actions/cache@v3
-        with:
-          path: |
-            .venv
-          key: ${{ runner.os }}-poetry-v2-py3.8-${{ hashFiles('./poetry.lock') }}
-
-      - name: git reset
-        run: git reset --hard
-
-      - name: install dependencies
-        run: make install-ci
-
-      - name: code coverage
-        run: make coverage-ci
-
-      - name: code coverage report
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: orgoro/coverage@32a2af98e56f47d958cf4c64b1f5e02161f2853e
-        with:
-          coverageFile: reports/coverage.xml
-          token: ${{ secrets.GITHUB_TOKEN }}
-          thresholdAll: 0.70
-
-      - name: setup java
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/setup-java@v3
-        with:
-          distribution: "corretto"
-          java-version: "17"
-
-      - name: provision sonar-scanner
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        run: |
-          export SONAR_VERSION="4.7.0.2747"
-          wget -q "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
-          unzip -q ./sonar-scanner.zip
-          mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
-          scripts/sonar_tests.py
-
-      - name: run sonar scan
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        run: |
-          PATH="$PWD/sonar-scanner/bin:$PATH"
-          sonar-scanner
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      - name: publish junit reports
-        if: success() || failure()
-        uses: mikepenz/action-junit-report@v2
-        with:
-          check_name: junit reports
-          report_paths: reports/junit/*.xml
 
 #
 #  publish:

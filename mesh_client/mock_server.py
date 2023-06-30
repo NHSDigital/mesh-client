@@ -14,7 +14,6 @@ also included, and the settings to use them are included in the mesh_client
 package as default_ssl_opts. Since these certs and keys are publicly available,
 they should only be used in test environments.
 """
-from __future__ import absolute_import, print_function
 
 import datetime
 import hmac

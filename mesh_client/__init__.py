@@ -1,10 +1,10 @@
-from __future__ import absolute_import
-
 import collections
 import datetime
 import functools
 import hmac
+import os.path
 import platform
+import ssl
 import time
 import uuid
 import warnings
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
 from itertools import chain
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import quote as q
 
 import pkg_resources
@@ -33,9 +33,11 @@ from .types import (
     TrackingResponse_v1,
 )
 
-MOCK_CA_CERT = pkg_resources.resource_filename("mesh_client", "ca.cert.pem")
-MOCK_CERT = pkg_resources.resource_filename("mesh_client", "client.cert.pem")
-MOCK_KEY = pkg_resources.resource_filename("mesh_client", "client.key.pem")
+_PACKAGE_DIR = os.path.dirname(__file__)
+
+MOCK_CA_CERT = os.path.join(_PACKAGE_DIR, "ca.cert.pem")
+MOCK_CERT = os.path.join(_PACKAGE_DIR, "client.cert.pem")
+MOCK_KEY = os.path.join(_PACKAGE_DIR, "client.key.pem")
 
 MOCK_SSL_OPTS = {"verify": MOCK_CA_CERT, "cert": (MOCK_CERT, MOCK_KEY)}
 """
@@ -46,15 +48,15 @@ NHS Digital.
 """
 default_ssl_opts = MOCK_SSL_OPTS
 
-INT_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-int-ca-bundle.pem")
-DEV_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-dev-ca-bundle.pem")
-DEP_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-dep-ca-bundle.pem")
-TRAIN_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-train-ca-bundle.pem")
-LIVE_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-live-root-ca.pem")
-OPENTEST_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-opt-ca-bundle.pem")
-DIGICERT_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-digicert-ca-bundle.pem")
-IG_INT_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-ig-int-ca-bundle.pem")
-IG_LIVE_CA_CERT = pkg_resources.resource_filename("mesh_client", "nhs-ig-live-ca-bundle.pem")
+INT_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-int-ca-bundle.pem")
+DEV_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-dev-ca-bundle.pem")
+DEP_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-dep-ca-bundle.pem")
+TRAIN_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-train-ca-bundle.pem")
+LIVE_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-live-root-ca.pem")
+OPENTEST_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-opt-ca-bundle.pem")
+DIGICERT_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-digicert-ca-bundle.pem")
+IG_INT_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-ig-int-ca-bundle.pem")
+IG_LIVE_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-ig-live-ca-bundle.pem")
 
 
 _OPTIONAL_HEADERS = {
@@ -83,17 +85,17 @@ _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
 VERSION = pkg_resources.get_distribution("mesh_client").version
 
 
-Endpoint = collections.namedtuple("Endpoint", ["url", "verify", "cert"])
-LOCAL_MOCK_ENDPOINT = Endpoint("https://localhost:8000", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY))
-LOCAL_FAKE_ENDPOINT = Endpoint("https://localhost:8829", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY))
-NHS_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", INT_CA_CERT, None)
-NHS_DEV_ENDPOINT = Endpoint("https://msg.dev.spine2.ncrs.nhs.uk", DEV_CA_CERT, None)
-NHS_DEP_ENDPOINT = Endpoint("https://msg.dep.spine2.ncrs.nhs.uk", DEP_CA_CERT, None)
-NHS_TRAIN_ENDPOINT = Endpoint("https://msg.train.spine2.ncrs.nhs.uk", TRAIN_CA_CERT, None)
-NHS_LIVE_ENDPOINT = Endpoint("https://mesh-sync.national.ncrs.nhs.uk", LIVE_CA_CERT, None)
-NHS_OPENTEST_ENDPOINT = Endpoint("https://192.168.128.11", OPENTEST_CA_CERT, None)
-NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", IG_LIVE_CA_CERT, None)
-NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint("https://msg.intspineservices.nhs.uk", IG_INT_CA_CERT, None)
+Endpoint = collections.namedtuple("Endpoint", ["url", "verify", "cert", "check_hostname"])
+LOCAL_MOCK_ENDPOINT = Endpoint("https://localhost:8000", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False)
+LOCAL_FAKE_ENDPOINT = Endpoint("https://localhost:8829", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False)
+NHS_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", INT_CA_CERT, None, False)
+NHS_DEV_ENDPOINT = Endpoint("https://msg.dev.spine2.ncrs.nhs.uk", DEV_CA_CERT, None, False)
+NHS_DEP_ENDPOINT = Endpoint("https://msg.dep.spine2.ncrs.nhs.uk", DEP_CA_CERT, None, False)
+NHS_TRAIN_ENDPOINT = Endpoint("https://msg.train.spine2.ncrs.nhs.uk", TRAIN_CA_CERT, None, False)
+NHS_LIVE_ENDPOINT = Endpoint("https://mesh-sync.national.ncrs.nhs.uk", LIVE_CA_CERT, None, False)
+NHS_OPENTEST_ENDPOINT = Endpoint("https://192.168.128.11", OPENTEST_CA_CERT, None, False)
+NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", IG_LIVE_CA_CERT, None, True)
+NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint("https://msg.intspineservices.nhs.uk", IG_INT_CA_CERT, None, True)
 
 
 def deprecated(reason=None):
@@ -120,6 +122,49 @@ class MeshError(Exception):
     pass
 
 
+class SSLContextAdapter(requests.adapters.HTTPAdapter):
+    def __init__(
+        self,
+        url: Union[str, Endpoint],
+        cert: Optional[Tuple[str, str]] = None,
+        verify: Optional[str] = None,
+        check_hostname: Optional[bool] = None,
+    ):
+        self.url = url
+        self.cert = cert
+        self.verify = verify
+        self.check_hostname = check_hostname
+        if check_hostname is None and hasattr(url, "check_hostname"):
+            self.check_hostname = url.check_hostname
+
+        if cert is None and hasattr(url, "cert"):
+            self.cert = url.cert
+
+        if verify is None and hasattr(url, "verify"):
+            self.verify = url.verify
+
+        super().__init__()
+
+    def init_poolmanager(self, *args, **kwargs):
+        context = ssl.create_default_context()
+
+        if self.cert and isinstance(self.cert, (tuple, list)):
+            context.load_cert_chain(*self.cert)
+
+        if self.verify and isinstance(self.verify, (str, bytes)):
+            context.load_verify_locations(self.verify)
+
+        if self.verify:
+            if context.check_hostname is not None:
+                context.check_hostname = cast(bool, self.check_hostname)
+            context.verify_mode = ssl.CERT_REQUIRED
+            if self.check_hostname is not False:
+                context.hostname_checks_common_name = True
+
+        kwargs["ssl_context"] = context
+        return super(SSLContextAdapter, self).init_poolmanager(*args, **kwargs)
+
+
 class MeshClient(object):
     """
     A class representing a single MESH session, for a given user on a given
@@ -129,12 +174,13 @@ class MeshClient(object):
 
     def __init__(
         self,
-        url,
-        mailbox,
-        password,
+        url: Union[str, Endpoint],
+        mailbox: str,
+        password: str,
         shared_key=get_shared_key_from_environ(),
-        cert=None,
-        verify=None,
+        cert: Optional[Tuple[str, str]] = None,
+        verify: Optional[str] = None,
+        check_hostname: Optional[bool] = None,
         max_chunk_size=75 * 1024 * 1024,
         proxies=None,
         transparent_compress=False,
@@ -173,6 +219,9 @@ class MeshClient(object):
         """
 
         self._session = requests.Session()
+        adapter = SSLContextAdapter(url, cert, verify, check_hostname)
+        self._session.mount("https://", adapter)
+        self._session.mount("http://", adapter)
         self._session.headers = {
             "User-Agent": (
                 f"mesh_client;{VERSION};N/A;{platform.processor() or platform.machine()};"
@@ -186,16 +235,6 @@ class MeshClient(object):
         else:
             self._url = url
 
-        if hasattr(url, "cert") and cert is None:
-            self._session.cert = url.cert
-        else:
-            self._session.cert = cert
-
-        if hasattr(url, "verify") and verify is None:
-            self._session.verify = url.verify
-        else:
-            self._session.verify = verify
-
         self._session.proxies = proxies or {}
         self._mailbox = mailbox
         self._max_chunk_size = max_chunk_size
@@ -207,6 +246,16 @@ class MeshClient(object):
     @property
     def mailbox_url(self) -> str:
         return f"{self._url}/messageexchange/{q(self._mailbox)}"
+
+    def ping(self) -> dict:
+        """
+        just connect to the _ping endpoint
+        """
+        response = self._session.get(f"{self._url}/messageexchange/_ping", timeout=self._timeout)
+
+        response.raise_for_status()
+
+        return cast(dict, response.json())
 
     def handshake(self):
         """

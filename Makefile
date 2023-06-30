@@ -109,7 +109,7 @@ coverage-test:
 
 
 pytest:
-	poetry run python -m unittest discover . '*_test.py'
+	poetry run python -m pytest
 
 test: pytest
 

@@ -251,7 +251,7 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
-    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]'
+    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
     needs:
       - coverage
       - lint

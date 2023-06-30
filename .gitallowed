@@ -23,7 +23,7 @@ mesh_client/nhs-ig-int-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
 mesh_client/nhs-ig-live-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
 mesh_client/nhs-ig-live-ca-bundle.pem:25:-----BEGIN CERTIFICATE-----
 mesh_client/nhs-int-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
-mesh_client/nhs-int-ca-bundle.pem:24:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-int-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
 mesh_client/nhs-live-root-ca.pem:1:-----BEGIN CERTIFICATE-----
 mesh_client/nhs-opt-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
 mesh_client/nhs-opt-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
@@ -32,3 +32,4 @@ mesh_client/nhs-train-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
 mesh_client/server.cert.pem:1:-----BEGIN CERTIFICATE-----
 mesh_client/server.key.pem:1:-----BEGIN RSA PRIVATE KEY-----
 mesh_client/server.key.pem:51:-----END RSA PRIVATE KEY-----
+mesh_client/__init__.py:179:        password: str

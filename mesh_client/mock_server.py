@@ -30,10 +30,9 @@ from contextlib import closing
 from hashlib import sha256
 from threading import Thread
 from typing import List, cast
+from urllib.parse import parse_qs
 from wsgiref.simple_server import WSGIServer, make_server
 from wsgiref.util import shift_path_info
-
-from six.moves.urllib.parse import parse_qs
 
 from .io_helpers import stream_from_wsgi_environ
 from .key_helper import get_shared_key_from_environ
@@ -355,7 +354,7 @@ class MockMeshApplication:
         """
         n = self._msg_count
         self._msg_count += 1
-        return "{ts:%Y%m%d%H%M%S%f}_{num:06d}".format(ts=datetime.datetime.now(), num=n)
+        return f"{datetime.datetime.now():%Y%m%d%H%M%S%f}_{n:06d}"
 
     def __enter__(self):
         self.start_server()

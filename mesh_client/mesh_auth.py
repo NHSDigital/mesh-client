@@ -8,7 +8,7 @@ from mesh_client.key_helper import get_shared_key_from_environ
 
 
 def encode_bytes(key):
-    return key.encode("utf-8")
+    return key.encode("utf-8", "surrogateescape")
 
 
 def main():

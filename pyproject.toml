@@ -26,7 +26,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 # core dependencies
-python = ">=2.7"
+python = ">=3.7"
 requests = ">=2.9.0"
 six = ">=1.10.0"
 
@@ -86,11 +86,10 @@ count = true
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py27,py37,py38,py39,py310,py311
+envlist = py37,py38,py39,py310,py311
 
 [gh-actions]
 python =
-    2.7: py27
     3.7: py37
     3.8: py38
     3.9: py39

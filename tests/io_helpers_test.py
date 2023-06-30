@@ -5,10 +5,8 @@ import io
 import tempfile
 from contextlib import closing
 from unittest import TestCase, main
-
-import six
-from six.moves.urllib.parse import urljoin
-from six.moves.urllib.request import pathname2url, urlopen
+from urllib.parse import urljoin
+from urllib.request import pathname2url, urlopen
 
 from mesh_client.io_helpers import (
     CombineStreams,
@@ -131,9 +129,9 @@ class IOHelpersTest(TestCase):
             instance = SplitStream(f, mebibyte)
             self.assertEqual(len(instance), 2)
             iterator = iter(instance)
-            chunk1 = six.next(iterator)
+            chunk1 = next(iterator)
             self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
-            chunk2 = six.next(iterator)
+            chunk2 = next(iterator)
             self.assertEqual(b"b", chunk2.read(mebibyte))
 
     def test_split_file_irregular_size_2(self):
@@ -145,9 +143,9 @@ class IOHelpersTest(TestCase):
             instance = SplitStream(f, mebibyte)
             self.assertEqual(len(instance), 2)
             iterator = iter(instance)
-            chunk1 = six.next(iterator)
+            chunk1 = next(iterator)
             self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
-            chunk2 = six.next(iterator)
+            chunk2 = next(iterator)
             self.assertEqual(b"b" * (mebibyte - 1), chunk2.read(mebibyte))
 
     def test_split_url(self):
@@ -170,9 +168,9 @@ class IOHelpersTest(TestCase):
                 instance = SplitStream(stream, mebibyte)
                 self.assertEqual(len(instance), 2)
                 iterator = iter(instance)
-                chunk1 = six.next(iterator)
+                chunk1 = next(iterator)
                 self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
-                chunk2 = six.next(iterator)
+                chunk2 = next(iterator)
                 self.assertEqual(b"b", chunk2.read(mebibyte))
 
     def test_split_url_irregular_size_2(self):
@@ -184,9 +182,9 @@ class IOHelpersTest(TestCase):
                 instance = SplitStream(stream, mebibyte)
                 self.assertEqual(len(instance), 2)
                 iterator = iter(instance)
-                chunk1 = six.next(iterator)
+                chunk1 = next(iterator)
                 self.assertEqual(b"a" * mebibyte, chunk1.read(mebibyte))
-                chunk2 = six.next(iterator)
+                chunk2 = next(iterator)
                 self.assertEqual(b"b" * (mebibyte - 1), chunk2.read(mebibyte))
 
     def test_split_bytes(self):
@@ -199,18 +197,18 @@ class IOHelpersTest(TestCase):
         instance = SplitStream(b"a" * small_chunk + b"b", small_chunk)
         self.assertEqual(len(instance), 2)
         iterator = iter(instance)
-        chunk1 = six.next(iterator)
+        chunk1 = next(iterator)
         self.assertEqual(b"a" * small_chunk, chunk1.read(small_chunk))
-        chunk2 = six.next(iterator)
+        chunk2 = next(iterator)
         self.assertEqual(b"b", chunk2.read(small_chunk))
 
     def test_split_bytes_irregular_size_2(self):
         instance = SplitStream(b"a" * small_chunk + b"b" * (small_chunk - 1), small_chunk)
         self.assertEqual(len(instance), 2)
         iterator = iter(instance)
-        chunk1 = six.next(iterator)
+        chunk1 = next(iterator)
         self.assertEqual(b"a" * small_chunk, chunk1.read(small_chunk))
-        chunk2 = six.next(iterator)
+        chunk2 = next(iterator)
         self.assertEqual(b"b" * (small_chunk - 1), chunk2.read(small_chunk))
 
     def test_split_combine_stream_misaligned_with_chunk_size_1(self):
@@ -219,13 +217,13 @@ class IOHelpersTest(TestCase):
         )
         self.assertEqual(len(instance), 4)
         iterator = iter(instance)
-        chunk1 = six.next(iterator)
+        chunk1 = next(iterator)
         self.assertEqual(b"12345", chunk1.read(5))
-        chunk2 = six.next(iterator)
+        chunk2 = next(iterator)
         self.assertEqual(b"67890", chunk2.read(5))
-        chunk3 = six.next(iterator)
+        chunk3 = next(iterator)
         self.assertEqual(b"12345", chunk3.read(5))
-        chunk4 = six.next(iterator)
+        chunk4 = next(iterator)
         self.assertEqual(b"6789", chunk4.read(5))
 
     def test_split_combine_stream_misaligned_with_chunk_size_2(self):
@@ -234,13 +232,13 @@ class IOHelpersTest(TestCase):
         )
         self.assertEqual(len(instance), 4)
         iterator = iter(instance)
-        chunk1 = six.next(iterator)
+        chunk1 = next(iterator)
         self.assertEqual(b"12345", chunk1.read(5))
-        chunk2 = six.next(iterator)
+        chunk2 = next(iterator)
         self.assertEqual(b"67890", chunk2.read(5))
-        chunk3 = six.next(iterator)
+        chunk3 = next(iterator)
         self.assertEqual(b"12345", chunk3.read(5))
-        chunk4 = six.next(iterator)
+        chunk4 = next(iterator)
         self.assertEqual(b"678", chunk4.read(5))
 
     def test_split_combine_stream_misaligned_with_chunk_size_3(self):
@@ -253,11 +251,11 @@ class IOHelpersTest(TestCase):
         )
         self.assertEqual(len(instance), 3)
         iterator = iter(instance)
-        chunk1 = six.next(iterator)
+        chunk1 = next(iterator)
         self.assertEqual(b"12345", chunk1.read(5))
-        chunk2 = six.next(iterator)
+        chunk2 = next(iterator)
         self.assertEqual(b"67890", chunk2.read(5))
-        chunk3 = six.next(iterator)
+        chunk3 = next(iterator)
         self.assertEqual(b"12", chunk3.read(5))
 
     def test_combine_streams(self):

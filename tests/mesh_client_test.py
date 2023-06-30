@@ -7,10 +7,10 @@ import traceback
 from collections import namedtuple
 from typing import Dict
 from unittest import TestCase, main
+from urllib.error import HTTPError
 
 import mock
 import requests
-from six.moves.urllib.error import HTTPError
 
 from mesh_client import (
     LOCAL_MOCK_ENDPOINT,
@@ -253,7 +253,6 @@ class MeshClientTest(TestCase):
             filename="upload.txt",
             local_id="12345",
             message_type="DATA",
-            process_id="321",
             workflow_id="111",
             encrypted=False,
             compressed=False,
@@ -264,7 +263,6 @@ class MeshClientTest(TestCase):
             self.assertEqual(msg.filename, "upload.txt")
             self.assertEqual(msg.local_id, "12345")
             self.assertEqual(msg.message_type, "DATA")
-            self.assertEqual(msg.process_id, "321")
             self.assertEqual(msg.workflow_id, "111")
             self.assertFalse(msg.encrypted)
             self.assertFalse(msg.compressed)

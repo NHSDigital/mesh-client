@@ -4,8 +4,7 @@ import io
 import os
 import warnings
 import zlib
-
-import six
+from typing import List, cast
 
 
 class IteratorMixin(object):
@@ -35,15 +34,15 @@ class IteratorMixin(object):
                 yield lines[-1]
                 break
 
-    def readline(self):
+    def readline(self) -> bytes:
         if not self.__line_iterator:
             self.__line_iterator = iter(self)
         try:
-            return six.next(self.__line_iterator)
+            return cast(bytes, next(self.__line_iterator))
         except StopIteration:
             return b""
 
-    def readlines(self):
+    def readlines(self) -> List[bytes]:
         return list(iter(self))
 
 
@@ -217,9 +216,9 @@ class _SplitChunk(IteratorMixin):
 class CombineStreams(IteratorMixin):
     def __init__(self, streams):
         self._streams = iter(streams)
-        self._current_stream = six.next(self._streams)
+        self._current_stream = next(self._streams)
 
-    def read(self, n=-1):
+    def read(self, n=-1) -> bytes:
         if n == -1:
             n = None
         result = io.BytesIO()
@@ -229,7 +228,7 @@ class CombineStreams(IteratorMixin):
                 result.write(data_read)
                 if n is None or len(data_read) < n:
                     self._close_current_stream()
-                    self._current_stream = six.next(self._streams)
+                    self._current_stream = next(self._streams)
                     if n is not None:
                         n -= len(data_read)
                 else:

@@ -6,4 +6,4 @@ def get_shared_key_from_environ() -> bytes:
     if isinstance(key_str, bytes):
         return key_str
 
-    return key_str.encode("utf-8")
+    return key_str.encode("utf-8", "surrogateescape")

@@ -8,14 +8,15 @@ import platform
 import time
 import uuid
 import warnings
+from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
 from itertools import chain
+from typing import Any, Dict, List, Optional, Union, cast
+from urllib.parse import quote as q
 
 import pkg_resources
 import requests
-import six
-from six.moves.urllib.parse import quote as q
 
 from .io_helpers import (
     CombineStreams,
@@ -24,6 +25,13 @@ from .io_helpers import (
     SplitStream,
 )
 from .key_helper import get_shared_key_from_environ
+from .types import (
+    EndpointLookupResponse_v1,
+    ListMessageResponse_v1,
+    SendMessageErrorResponse_v1,
+    SendMessageResponse_v1,
+    TrackingResponse_v1,
+)
 
 MOCK_CA_CERT = pkg_resources.resource_filename("mesh_client", "ca.cert.pem")
 MOCK_CERT = pkg_resources.resource_filename("mesh_client", "client.cert.pem")
@@ -54,7 +62,6 @@ _OPTIONAL_HEADERS = {
     "filename": "Mex-FileName",
     "local_id": "Mex-LocalID",
     "message_type": "Mex-MessageType",
-    "process_id": "Mex-ProcessID",
     "subject": "Mex-Subject",
     "encrypted": "Mex-Content-Encrypted",
     "compressed": "Mex-Content-Compressed",
@@ -69,8 +76,6 @@ _RECEIVE_HEADERS = {
     "message_id": "Mex-MessageID",
     "version": "Mex-Version",
     "partner_id": "Mex-PartnerID",
-    "recipient_smtp": "Mex-ToSMTP",
-    "sender_smtp": "Mex-FromSMTP",
 }
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
 
@@ -199,19 +204,23 @@ class MeshClient(object):
         self._timeout = timeout
         self._close_called = False
 
+    @property
+    def mailbox_url(self) -> str:
+        return f"{self._url}/messageexchange/{q(self._mailbox)}"
+
     def handshake(self):
         """
         List all messages in user's inbox. Returns a list of message_ids
         """
         headers = {
-            "mex-ClientVersion": "mesh_client=={}".format(VERSION),
+            "mex-ClientVersion": f"mesh_client=={VERSION}",
             "mex-OSArchitecture": platform.processor() or platform.machine(),
             "mex-OSName": platform.system(),
-            "mex-OSVersion": "{} {}".format(platform.release(), platform.version()),
+            "mex-OSVersion": f"{platform.release()} {platform.version()}",
             "mex-JavaVersion": "N/A",
         }
         response = self._session.post(
-            "{}/messageexchange/{}".format(self._url, q(self._mailbox)), headers=headers, timeout=self._timeout
+            f"{self._url}/messageexchange/{q(self._mailbox)}", headers=headers, timeout=self._timeout
         )
 
         response.raise_for_status()
@@ -219,71 +228,71 @@ class MeshClient(object):
         return b"hello"
 
     @deprecated("this api endpoint is marked as deprecated")
-    def count_messages(self):
+    def count_messages(self) -> int:
         """
         Count all messages in user's inbox. Returns an integer
         """
-        response = self._session.get(
-            "{}/messageexchange/{}/count".format(self._url, q(self._mailbox)), timeout=self._timeout
-        )
+        response = self._session.get(f"{self.mailbox_url}/count", timeout=self._timeout)
         response.raise_for_status()
-        return response.json()["count"]
+        return cast(int, response.json()["count"])
 
-    def track_by_message_id(self, message_id=None):
+    def track_by_message_id(self, message_id=None) -> TrackingResponse_v1:
         """
         Gets tracking information from MESH about a message, by its  message id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
-        url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(self._url, q(self._mailbox), q(message_id))
+        url = f"{self._url}/messageexchange/{q(self._mailbox)}/outbox/tracking?messageID={q(message_id)}"
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
-        return response.json()
+        return cast(TrackingResponse_v1, response.json())
+
+    def _get_tracking_url(self, tracking_id: Optional[str] = None, message_id: Optional[str] = None) -> str:
+        if message_id:
+            return f"{self.mailbox_url}/outbox/tracking?messageID={q(message_id)}"
+
+        if tracking_id:
+            return f"{self.mailbox_url}/outbox/tracking/{q(tracking_id)}"
+
+        raise ValueError(
+            "Exactly one of local message id (called tracking_id, for historical reasons) "
+            "and message_id must be provided"
+        )
 
     @deprecated(reason="tracking by local_id is deprecated, please use 'track_by_message_id'")
-    def get_tracking_info(self, tracking_id=None, message_id=None):
+    def get_tracking_info(
+        self, tracking_id: Optional[str] = None, message_id: Optional[str] = None
+    ) -> TrackingResponse_v1:
         """
         Gets tracking information from MESH about a message, by its local message id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
-        if (tracking_id is not None) + (message_id is not None) != 1:
-            raise ValueError(
-                "Exactly one of local message id (called tracking_id, for historical reasons) "
-                "and message_id must be provided"
-            )
 
-        if tracking_id:
-            url = "{}/messageexchange/{}/outbox/tracking/{}".format(self._url, q(self._mailbox), q(tracking_id))
-        else:
-            url = "{}/messageexchange/{}/outbox/tracking?messageID={}".format(
-                self._url, q(self._mailbox), q(message_id)
-            )
+        url = self._get_tracking_url(tracking_id, message_id)
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
-        return response.json()
+        return cast(TrackingResponse_v1, response.json())
 
-    def lookup_endpoint(self, organisation_code, workflow_id):
+    def lookup_endpoint(self, organisation_code: str, workflow_id: str) -> EndpointLookupResponse_v1:
         """
         Lookup a mailbox by organisation code and workflow id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
         response = self._session.get(
-            "{}/endpointlookup/mesh/{}/{}".format(self._url, q(organisation_code), q(workflow_id)),
+            f"{self._url}/endpointlookup/mesh/{q(organisation_code)}/{q(workflow_id)}",
             timeout=self._timeout,
         )
         response.raise_for_status()
-        return response.json()
+        return cast(EndpointLookupResponse_v1, response.json())
 
-    def list_messages(self):
+    def list_messages(self) -> List[str]:
         """
         List all messages in user's inbox. Returns a list of message_ids
         """
-        response = self._session.get(
-            "{}/messageexchange/{}/inbox".format(self._url, q(self._mailbox)), timeout=self._timeout
-        )
+        response = self._session.get(f"{self.mailbox_url}/inbox", timeout=self._timeout)
         response.raise_for_status()
-        return response.json()["messages"]
+        return cast(ListMessageResponse_v1, response.json())["messages"]
 
     def retrieve_message(self, message_id):
         """
@@ -292,7 +301,7 @@ class MeshClient(object):
         """
         message_id = getattr(message_id, "_msg_id", message_id)
         response = self._session.get(
-            "{}/messageexchange/{}/inbox/{}".format(self._url, q(self._mailbox), q(message_id)),
+            f"{self.mailbox_url}/inbox/{q(message_id)}",
             stream=True,
             timeout=self._timeout,
         )
@@ -301,14 +310,14 @@ class MeshClient(object):
 
     def retrieve_message_chunk(self, message_id, chunk_num):
         response = self._session.get(
-            "{}/messageexchange/{}/inbox/{}/{}".format(self._url, q(self._mailbox), q(message_id), chunk_num),
+            f"{self.mailbox_url}/inbox/{q(message_id)}/{chunk_num}",
             stream=True,
             timeout=self._timeout,
         )
         response.raise_for_status()
         return response
 
-    def send_message(self, recipient, data, max_chunk_size=None, **kwargs):
+    def send_message(self, recipient, data, max_chunk_size=None, **kwargs) -> str:
         """
         Send a message to recipient containing data.
 
@@ -359,12 +368,8 @@ class MeshClient(object):
                     value = "Y" if value else "N"
                 headers[_OPTIONAL_HEADERS[key]] = str(value)
             else:
-                raise TypeError(
-                    "Unrecognised keyword argument {key}."
-                    " optional arguments are: {args}".format(
-                        key=key, args=", ".join(["recipient", "data"] + list(_OPTIONAL_HEADERS.keys()))
-                    )
-                )
+                optional_args = ", ".join(["recipient", "data"] + list(_OPTIONAL_HEADERS.keys()))
+                raise TypeError(f"Unrecognised keyword argument '{key}'.  optional arguments are: {optional_args}")
 
         if transparent_compress:
             headers["Mex-Content-Compress"] = "Y"
@@ -372,12 +377,12 @@ class MeshClient(object):
 
         max_chunk_size = max_chunk_size or self._max_chunk_size
         chunks = SplitStream(data, max_chunk_size)
-        headers["Mex-Chunk-Range"] = "1:{}".format(len(chunks))
+        headers["Mex-Chunk-Range"] = f"1:{len(chunks)}"
         chunk_iterator = iter(chunks)
 
-        chunk1 = maybe_compressed(six.next(chunk_iterator))
+        chunk1 = maybe_compressed(next(chunk_iterator))
         response1 = self._session.post(
-            "{}/messageexchange/{}/outbox".format(self._url, q(self._mailbox)),
+            f"{self.mailbox_url}/outbox",
             data=chunk1,
             headers=headers,
             timeout=self._timeout,
@@ -385,10 +390,16 @@ class MeshClient(object):
         # MESH server dumps XML SOAP output on internal server error
         if response1.status_code >= 500:
             response1.raise_for_status()
-        json_resp = response1.json()
-        if response1.status_code == 417 or "errorDescription" in json_resp:
-            raise MeshError(json_resp["errorDescription"], json_resp)
-        message_id = json_resp["messageID"]
+
+        response_dict = response1.json()
+        if response1.status_code == 417 or "errorDescription" in response_dict:
+            error_response = cast(SendMessageErrorResponse_v1, response_dict)
+            raise MeshError(error_response["errorDescription"], error_response)
+
+        success_response = cast(SendMessageResponse_v1, response_dict)
+        if response1.status_code == 417 or "errorDescription" in success_response:
+            raise MeshError(success_response["errorDescription"], success_response)
+        message_id = success_response["messageID"]
 
         for i, chunk in enumerate(chunk_iterator):
             data = maybe_compressed(chunk)
@@ -403,14 +414,13 @@ class MeshClient(object):
             chunk_num = i + 2
             headers = {
                 "Content-Type": "application/octet-stream",
-                "Mex-Chunk-Range": "{}:{}".format(chunk_num, len(chunks)),
+                "Mex-Chunk-Range": f"{chunk_num}:{len(chunks)}",
                 "Mex-From": self._mailbox,
             }
             if transparent_compress:
                 headers["Mex-Content-Compress"] = "Y"
                 headers["Content-Encoding"] = "gzip"
 
-            response = None
             for i in range(self._max_chunk_retries + 1):
                 if self._max_chunk_retries > 0:
                     buf.seek(0)
@@ -419,7 +429,7 @@ class MeshClient(object):
                 time.sleep(i**2)
 
                 response = self._session.post(
-                    "{}/messageexchange/{}/outbox/{}/{}".format(self._url, q(self._mailbox), q(message_id), chunk_num),
+                    f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_num}",
                     data=buf,
                     headers=headers,
                     timeout=self._timeout,
@@ -428,8 +438,10 @@ class MeshClient(object):
                 # check other successful response codes
                 if response.status_code == 200 or response.status_code == 202:
                     break
-            else:
-                assert response
+
+                if i < self._max_chunk_retries:
+                    continue
+
                 response.raise_for_status()
 
         return message_id
@@ -440,7 +452,7 @@ class MeshClient(object):
         """
         message_id = getattr(message_id, "_msg_id", message_id)
         response = self._session.put(
-            "{}/messageexchange/{}/inbox/{}/status/acknowledged".format(self._url, q(self._mailbox), q(message_id)),
+            f"{self.mailbox_url}/inbox/{q(message_id)}/status/acknowledged",
             timeout=self._timeout,
         )
         response.raise_for_status()
@@ -478,7 +490,29 @@ class MeshClient(object):
         self.close()
 
 
-class Message(object):
+@dataclass
+class _MessageAttrs:
+    """
+    this is for type hinting on the commonly used message attrs below ( which are dynamically generated )
+    """
+
+    message_id: str
+    message_type: str
+    recipient: str
+    sender: Optional[str] = None
+
+    workflow_id: Optional[str] = None
+    filename: Optional[str] = None
+    local_id: Optional[str] = None
+    partner_id: Optional[str] = None
+    chunk_range: Optional[str] = None
+
+    subject: Optional[str] = None
+    encrypted: Optional[Union[str, bool]] = None
+    compressed: Optional[Union[str, bool]] = None
+
+
+class _BaseMessage:
     """
     An object representing a message received from MESH. This is a file-like
     object, and can be passed to anything that expects an object with a `read`
@@ -511,23 +545,23 @@ class Message(object):
     no exceptions are thrown whilst handling the message.
     """
 
-    def __init__(self, msg_id, response, client):
+    def __init__(self, msg_id: str, response, client):
         self._msg_id = msg_id
         self._client = client
-        self._mex_headers = {}
+        self._mex_headers: Dict[str, Any] = {}
 
         headers = response.headers
-        for key, value in six.iteritems(headers):
-            lkey = key.lower()
+        for header, header_value in headers.items():
+            lkey = header.lower()
             if lkey.startswith("mex-"):
-                self._mex_headers[lkey[4:]] = value
+                self._mex_headers[lkey[4:]] = header_value
 
-        for key, value in _RECEIVE_HEADERS.items():
-            header_value = headers.get(value, None)
-            if key in _BOOLEAN_HEADERS:
+        for attribute, header in _RECEIVE_HEADERS.items():
+            header_value = headers.get(header, None)
+            if attribute in _BOOLEAN_HEADERS:
                 header_value = header_value or "N"
                 header_value = header_value.upper() in ["Y", "TRUE"]
-            setattr(self, key, header_value)
+            setattr(self, attribute, header_value)
         chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
         maybe_decompress = (
             lambda resp: GzipDecompressStream(resp.raw) if resp.headers.get("Content-Encoding") == "gzip" else resp.raw
@@ -539,7 +573,7 @@ class Message(object):
             )
         )
 
-    def id(self):
+    def id(self) -> str:
         """return the message id
 
         Returns:
@@ -547,20 +581,20 @@ class Message(object):
         """
         return self._msg_id
 
-    def read(self, n=None):
+    def read(self, n=None) -> bytes:
         """
         Read up to n bytes from the message, or read the remainder of the
         message, if n is not provided.
         """
         return self._response.read(n)
 
-    def readline(self):
+    def readline(self) -> bytes:
         """
         Read a single line from the message
         """
         return self._response.readline()
 
-    def readlines(self):
+    def readlines(self) -> List[bytes]:
         """
         Read all lines from the message
         """
@@ -593,7 +627,7 @@ class Message(object):
 
     def mex_headers(self):
         """returns a generator iteritems for all the headers"""
-        return six.iteritems(self._mex_headers)
+        return self._mex_headers.items()
 
     def __enter__(self):
         return self
@@ -610,6 +644,11 @@ class Message(object):
         Iterate through lines of the message
         """
         return iter(self._response)
+
+
+class Message(_BaseMessage, _MessageAttrs):
+    def __init__(self, msg_id: str, response, client):
+        super().__init__(msg_id, response, client)
 
 
 class AuthTokenGenerator(object):
@@ -630,13 +669,13 @@ class AuthTokenGenerator(object):
             # This is being used in its legacy capacity
             return token
 
-    def generate_token(self):
+    def generate_token(self) -> str:
         now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M")
         public_auth_data = _combine(self._mailbox, self._nonce, self._nonce_count, now)
         private_auth_data = _combine(self._mailbox, self._nonce, self._nonce_count, self._password, now)
         myhash = hmac.HMAC(self._key, private_auth_data.encode("ASCII"), sha256).hexdigest()
         self._nonce_count += 1
-        return "NHSMESH {public_auth_data}:{myhash}".format(**locals())
+        return f"NHSMESH {public_auth_data}:{myhash}"
 
 
 # Preserve old name, even though it's part of the API now

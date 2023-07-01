@@ -32,7 +32,7 @@ clean_dist:
 	rm -r dist/ || true
 
 dist: clean_dist
-	python -m build --no-isolation
+	python -m build
 
 
 delete-hooks:
@@ -115,6 +115,12 @@ test: pytest
 
 tox:
 	poetry run tox
+
+down:
+	docker compose down --remove-orphans || true
+
+up:
+	docker compose up -d --remove-orphans --build
 
 coverage-ci: coverage-cleanup coverage-ci-test coverage-report
 

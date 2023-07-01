@@ -42,6 +42,9 @@ jobs:
       - name: install dependencies
         run: make install-ci
 
+      - name: start docker containers
+        run: make up
+
       - name: code coverage
         run: make coverage-ci
 
@@ -84,3 +87,7 @@ jobs:
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml
+
+      - name: stop docker containers
+        if: success() || failure()
+        run: make down

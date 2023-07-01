@@ -28,7 +28,7 @@ classifiers = [
 # core dependencies
 python = ">=3.7"
 requests = ">=2.9.0"
-six = ">=1.10.0"
+
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
@@ -51,10 +51,11 @@ coverage = "^7.2.7"
 pytest = "^7.4.0"
 
 [tool.poetry.group.local.dependencies]
-ipython = {version = "^8.14.0", python = ">=3.9"}
+ipython = {version = "^8.14.0", python = ">=3.9,<4.0"}
+
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
+#asyncio_mode = "auto"
 python_classes = "NoTestClassesPlease"
 python_files = "*_test.py test_*.py"
 norecursedirs = ".git .venv .eggs build dist terraform features"
@@ -114,6 +115,45 @@ commands =
 
 """
 
+[tool.coverage.run]
+branch = true
+omit = [
+    "features/*",
+    ".venv/lib/*",
+    "build/*",
+    "**/build/*",
+    "dist/*",
+    "**/dist/*",
+    "src/shared/aws.py",
+    "scripts/*",
+]
+source = [
+    "."
+]
+
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    "pragma: no cover",
+    "from .*",
+    "import .*"
+]
+omit = [
+    "*/conftest.py",
+    "*_tests.py",
+    "*/test_helpers*",
+    "*/test_mailbox_provider.py"
+]
+sort = "-cover"
+ignore_errors = true
+precision = 2
+fail_under = 85
+show_missing = true
+
+[tool.coverage.xml]
+output = "reports/coverage.xml"
+
 [tool.mypy]
 python_version = "3.7"
 warn_return_any = true
@@ -124,9 +164,6 @@ check_untyped_defs = true
 [tool.isort]
 profile = "black"
 
-#[tool.setuptools_scm]
-#local_scheme = "no-local-version"
-#version_scheme = "post-release"
 
 [tool.poetry-dynamic-versioning]
 enable = true

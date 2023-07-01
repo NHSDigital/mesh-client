@@ -6,7 +6,8 @@ from _socket import gaierror
 from requests.exceptions import HTTPError, SSLError
 
 import mesh_client
-from mesh_client import MOCK_CERT, MOCK_KEY, NHS_INT_ENDPOINT, Endpoint, MeshClient
+from mesh_client import NHS_INT_ENDPOINT, Endpoint, MeshClient
+from tests.helpers import MOCK_CERT, MOCK_KEY
 
 
 def _host_resolves(endpoint: Endpoint):
@@ -35,8 +36,8 @@ _HSCN_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if "_INTERN
 @pytest.mark.skipif(not _host_resolves(NHS_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints(name: str, endpoint: Endpoint):
     with pytest.raises(HTTPError) as err:
-        client = MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD")
-        client.ping()
+        with MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client:
+            client.ping()
 
     assert err.value.response.status_code == 400
 
@@ -44,8 +45,8 @@ def test_hscn_endpoints(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize("name, endpoint", _INTERNET_ENDPOINTS)
 def test_live_internet_endpoint(name: str, endpoint: Endpoint):
     with pytest.raises(SSLError) as err:
-        client = MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY))
-        client.ping()
+        with MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client:
+            client.ping()
 
     # the internet endpoints behave differently they will not return a 400 bad request
     # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"

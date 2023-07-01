@@ -33,8 +33,8 @@ from urllib.parse import parse_qs
 from wsgiref.simple_server import WSGIServer, make_server
 from wsgiref.util import shift_path_info
 
-from .io_helpers import stream_from_wsgi_environ
-from .key_helper import get_shared_key_from_environ
+from mesh_client.io_helpers import ChunkedStream, FiniteLengthStream
+from mesh_client.key_helper import get_shared_key_from_environ
 
 _OPTIONAL_HEADERS = {
     "HTTP_CONTENT_ENCODING": "Content-Encoding",
@@ -57,6 +57,16 @@ _OPTIONAL_HEADERS = {
 
 
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S%f"
+
+
+def stream_from_wsgi_environ(environ):
+    if environ.get("CONTENT_LENGTH"):
+        return FiniteLengthStream(environ["wsgi.input"], int(environ["CONTENT_LENGTH"]))
+    elif environ.get("HTTP_TRANSFER_ENCODING") == "chunked":
+        return ChunkedStream(environ["wsgi.input"])
+    else:
+        # terminated by close
+        return environ["wsgi.input"]
 
 
 def _dumb_response_code(code, message):
@@ -87,11 +97,17 @@ def _error(content_type, data, start_error_response):
 
 def _compose(**kwargs):
     def handle(environ, start_response):
-        path_component = shift_path_info(environ) or "default"
-        if path_component in kwargs:
-            return kwargs[path_component](environ, start_response)
-        else:
+        path_component = shift_path_info(environ) or "none"
+        if path_component not in kwargs:
+            if "default" in kwargs:
+                remaining_path = environ["PATH_INFO"]
+                environ["PATH_INFO"] = "/".join(
+                    ["", path_component, remaining_path] if remaining_path else ["", path_component]
+                )
+                return kwargs["default"](environ, start_response)
             return _not_found(environ, start_response)
+
+        return kwargs[path_component](environ, start_response)
 
     return handle
 
@@ -123,11 +139,12 @@ class MockMeshApplication:
 
     @property
     def __call__(self):
-        return _compose(messageexchange=self.message_exchange, endpointlookup=_compose(mesh=self.endpoint_lookup))
+        return _compose(messageexchange=self.message_exchange)
 
     def authenticated(self, handler):
         def handle(environ, start_response):
             requested_mailbox = shift_path_info(environ)
+
             authorization_header = environ.get("HTTP_AUTHORIZATION", "")
             if not authorization_header.startswith("NHSMESH "):
                 return _not_authorized(environ, start_response)
@@ -161,8 +178,11 @@ class MockMeshApplication:
 
     @property
     def message_exchange(self):
-        return self.authenticated(
-            _compose(inbox=self.inbox, outbox=self.outbox, count=self.count, default=self.handshake)
+        return _compose(
+            endpointlookup=self.endpoint_lookup,
+            default=self.authenticated(
+                _compose(inbox=self.inbox, outbox=self.outbox, count=self.count, none=self.handshake)
+            ),
         )
 
     def inbox(self, environ, start_response):
@@ -429,13 +449,3 @@ class SSLWSGIServer(WSGIServer, object):
     def get_request(self):
         (socket, addr) = super(SSLWSGIServer, self).get_request()
         return self.__context.wrap_socket(socket, server_side=True), addr
-
-
-def main():
-    print("Serving on port 8000")
-    server = make_server("", 8000, MockMeshApplication(), server_class=SSLWSGIServer)
-    server.serve_forever(0.01)
-
-
-if __name__ == "__main__":
-    main()

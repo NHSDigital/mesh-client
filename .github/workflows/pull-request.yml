@@ -45,11 +45,18 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: start docker containers
+        run: make up
+
       - name: install dependencies
         run: pip install tox tox-gh-actions
 
       - name: tox
         run: tox
+
+      - name: stop docker containers
+        if: success() || failure()
+        run: make down
 
 
   coverage:
@@ -115,6 +122,9 @@ jobs:
       - name: black
         run: make black-check
 
+      - name: start docker containers
+        run: make up
+
       - name: code coverage
         run: make coverage-ci
 
@@ -170,6 +180,10 @@ jobs:
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml
+
+      - name: stop docker containers
+        if: success() || failure()
+        run: make down
 
   lint:
     runs-on: ubuntu-latest
@@ -251,7 +265,7 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
-    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]'
     needs:
       - coverage
       - lint
@@ -300,11 +314,11 @@ jobs:
       - name: build dist
         run: |
           version="v$(poetry version | rev | cut -d' ' -f1 | rev)"
+          echo $version
           echo "RELEASE_VERSION=$version" >> $GITHUB_ENV
-          git tag $version
-          RELEASE_VERSION=$version" make dist
-          echo "WHEEL=$(find dist -type f -name '*.whl' | xargs basename)" >> $GITHUB_ENV
-          echo "SDIST=$(find dist -type f -name '*.tar.gz' | xargs basename)" >> $GITHUB_ENV
+          git tag "${version}"
+          RELEASE_VERSION="${version}" make dist
+          ls -l dist
 
       - name: test publish
         uses: pypa/gh-action-pypi-publish@release/v1

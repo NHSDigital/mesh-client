@@ -15,8 +15,9 @@ from itertools import chain
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import quote as q
 
-import pkg_resources
+import importlib_metadata
 import requests
+from requests.adapters import HTTPAdapter
 
 from .io_helpers import (
     CombineStreams,
@@ -33,20 +34,10 @@ from .types import (
     TrackingResponse_v1,
 )
 
+__version__ = importlib_metadata.distribution("mesh client")
+
+
 _PACKAGE_DIR = os.path.dirname(__file__)
-
-MOCK_CA_CERT = os.path.join(_PACKAGE_DIR, "ca.cert.pem")
-MOCK_CERT = os.path.join(_PACKAGE_DIR, "client.cert.pem")
-MOCK_KEY = os.path.join(_PACKAGE_DIR, "client.key.pem")
-
-MOCK_SSL_OPTS = {"verify": MOCK_CA_CERT, "cert": (MOCK_CERT, MOCK_KEY)}
-"""
-Usable default values for verify and cert, providing certificates and keys
-which should work with mock_server. Note that these certs will not work with
-any NHS Digital test environments - such certs must be obtained from
-NHS Digital.
-"""
-default_ssl_opts = MOCK_SSL_OPTS
 
 INT_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-int-ca-bundle.pem")
 DEV_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-dev-ca-bundle.pem")
@@ -82,12 +73,8 @@ _RECEIVE_HEADERS = {
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
 
 
-VERSION = pkg_resources.get_distribution("mesh_client").version
-
-
 Endpoint = collections.namedtuple("Endpoint", ["url", "verify", "cert", "check_hostname"])
-LOCAL_MOCK_ENDPOINT = Endpoint("https://localhost:8000", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False)
-LOCAL_FAKE_ENDPOINT = Endpoint("https://localhost:8829", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False)
+
 NHS_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", INT_CA_CERT, None, False)
 NHS_DEV_ENDPOINT = Endpoint("https://msg.dev.spine2.ncrs.nhs.uk", DEV_CA_CERT, None, False)
 NHS_DEP_ENDPOINT = Endpoint("https://msg.dep.spine2.ncrs.nhs.uk", DEP_CA_CERT, None, False)
@@ -122,12 +109,12 @@ class MeshError(Exception):
     pass
 
 
-class SSLContextAdapter(requests.adapters.HTTPAdapter):
+class SSLContextAdapter(HTTPAdapter):
     def __init__(
         self,
         url: Union[str, Endpoint],
-        cert: Optional[Tuple[str, str]] = None,
-        verify: Optional[str] = None,
+        cert: Optional[Union[Tuple[str], Tuple[str, str], Tuple[str, str, str]]] = None,
+        verify: Optional[Union[str, bool]] = None,
         check_hostname: Optional[bool] = None,
     ):
         self.url = url
@@ -151,15 +138,20 @@ class SSLContextAdapter(requests.adapters.HTTPAdapter):
         if self.cert and isinstance(self.cert, (tuple, list)):
             context.load_cert_chain(*self.cert)
 
-        if self.verify and isinstance(self.verify, (str, bytes)):
-            context.load_verify_locations(self.verify)
-
         if self.verify:
+            if isinstance(self.verify, (str, bytes)):
+                context.load_verify_locations(self.verify)
+
             if context.check_hostname is not None:
                 context.check_hostname = cast(bool, self.check_hostname)
+
             context.verify_mode = ssl.CERT_REQUIRED
             if self.check_hostname is not False:
                 context.hostname_checks_common_name = True
+
+        if self.verify is False:
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
 
         kwargs["ssl_context"] = context
         return super(SSLContextAdapter, self).init_poolmanager(*args, **kwargs)
@@ -177,13 +169,13 @@ class MeshClient(object):
         url: Union[str, Endpoint],
         mailbox: str,
         password: str,
-        shared_key=get_shared_key_from_environ(),
-        cert: Optional[Tuple[str, str]] = None,
-        verify: Optional[str] = None,
+        shared_key: Optional[bytes] = None,
+        cert: Optional[Union[Tuple[str], Tuple[str, str], Tuple[str, str, str]]] = None,
+        verify: Optional[Union[str, bool]] = None,
         check_hostname: Optional[bool] = None,
         max_chunk_size=75 * 1024 * 1024,
-        proxies=None,
-        transparent_compress=False,
+        proxies: Optional[Dict[str, str]] = None,
+        transparent_compress: bool = False,
         max_chunk_retries=0,
         timeout=10 * 60,
     ):
@@ -194,8 +186,6 @@ class MeshClient(object):
         password. The endpoint URL can either be a string, or a preconfigured
         endpoint. Currently the following endpoints are preconfigured:
 
-        LOCAL_MOCK_ENDPOINT
-        LOCAL_FAKE_ENDPOINT
         NHS_INT_ENDPOINT
         NHS_LIVE_ENDPOINT
         NHS_OPENTEST_ENDPOINT
@@ -218,13 +208,15 @@ class MeshClient(object):
         sending.
         """
 
+        shared_key = shared_key or get_shared_key_from_environ()
+
         self._session = requests.Session()
         adapter = SSLContextAdapter(url, cert, verify, check_hostname)
         self._session.mount("https://", adapter)
         self._session.mount("http://", adapter)
         self._session.headers = {
             "User-Agent": (
-                f"mesh_client;{VERSION};N/A;{platform.processor() or platform.machine()};"
+                f"mesh_client;{__version__};N/A;{platform.processor() or platform.machine()};"
                 f"{platform.system()};{platform.release()} {platform.version()}"
             ),
             "Accept-Encoding": "gzip",
@@ -234,6 +226,11 @@ class MeshClient(object):
             self._url = url.url
         else:
             self._url = url
+
+        if verify is not None:
+            self._session.verify = verify
+        elif hasattr(url, "verify"):
+            self._session.verify = url.verify
 
         self._session.proxies = proxies or {}
         self._mailbox = mailbox
@@ -262,15 +259,13 @@ class MeshClient(object):
         List all messages in user's inbox. Returns a list of message_ids
         """
         headers = {
-            "mex-ClientVersion": f"mesh_client=={VERSION}",
+            "mex-ClientVersion": f"mesh_client=={__version__}",
             "mex-OSArchitecture": platform.processor() or platform.machine(),
             "mex-OSName": platform.system(),
             "mex-OSVersion": f"{platform.release()} {platform.version()}",
             "mex-JavaVersion": "N/A",
         }
-        response = self._session.post(
-            f"{self._url}/messageexchange/{q(self._mailbox)}", headers=headers, timeout=self._timeout
-        )
+        response = self._session.post(self.mailbox_url, headers=headers, timeout=self._timeout)
 
         response.raise_for_status()
 
@@ -290,7 +285,7 @@ class MeshClient(object):
         Gets tracking information from MESH about a message, by its  message id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
-        url = f"{self._url}/messageexchange/{q(self._mailbox)}/outbox/tracking?messageID={q(message_id)}"
+        url = f"{self.mailbox_url}/outbox/tracking?messageID={q(message_id)}"
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
@@ -323,13 +318,13 @@ class MeshClient(object):
         response.raise_for_status()
         return cast(TrackingResponse_v1, response.json())
 
-    def lookup_endpoint(self, organisation_code: str, workflow_id: str) -> EndpointLookupResponse_v1:
+    def lookup_endpoint(self, ods_code: str, workflow_id: str) -> EndpointLookupResponse_v1:
         """
         Lookup a mailbox by organisation code and workflow id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
         response = self._session.get(
-            f"{self._url}/endpointlookup/mesh/{q(organisation_code)}/{q(workflow_id)}",
+            f"{self._url}/messageexchange/endpointlookup/{q(ods_code)}/{q(workflow_id)}",
             timeout=self._timeout,
         )
         response.raise_for_status()
@@ -445,9 +440,11 @@ class MeshClient(object):
             error_response = cast(SendMessageErrorResponse_v1, response_dict)
             raise MeshError(error_response["errorDescription"], error_response)
 
+        if response1.status_code not in (200, 202):
+            raise MeshError(response_dict)
+
         success_response = cast(SendMessageResponse_v1, response_dict)
-        if response1.status_code == 417 or "errorDescription" in success_response:
-            raise MeshError(success_response["errorDescription"], success_response)
+
         message_id = success_response["messageID"]
 
         for i, chunk in enumerate(chunk_iterator):
@@ -485,7 +482,7 @@ class MeshClient(object):
                 )
 
                 # check other successful response codes
-                if response.status_code == 200 or response.status_code == 202:
+                if response.status_code in (200, 202):
                     break
 
                 if i < self._max_chunk_retries:

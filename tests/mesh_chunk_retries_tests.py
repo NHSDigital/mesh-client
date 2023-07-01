@@ -7,8 +7,9 @@ import mock
 import pytest
 import requests
 
-from mesh_client import MeshClient, default_ssl_opts
-from mesh_client.mock_server import MockMeshChunkRetryApplication
+from mesh_client import MeshClient
+from tests.helpers import default_ssl_opts
+from tests.mock_server import MockMeshChunkRetryApplication
 
 alice_mailbox = "alice"
 alice_password = "password"

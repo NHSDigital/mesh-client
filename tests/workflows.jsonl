@@ -1,0 +1,2 @@
+{"workflow_id": "RESTRICTED_WORKFLOW", "senders":  ["ALICE"], "receivers":  ["BOB"]}
+{"workflow_id": "ANOTHER_WORKFLOW", "senders":  ["BOB"], "receivers":  ["BARRY", "ALICE"]}

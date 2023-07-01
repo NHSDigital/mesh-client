@@ -1,9 +1,8 @@
-name: merge-develop
+name: merge-release
 on:
   push:
     branches:
       - release
-
 
 jobs:
 
@@ -39,8 +38,8 @@ jobs:
         run: |
           version="v$(poetry version patch | rev | cut -d' ' -f1 | rev)"
           echo "RELEASE_VERSION=$version" >> $GITHUB_ENV
-          git tag $version
-          RELEASE_VERSION=$version" make dist
+          git tag "${version}"
+          RELEASE_VERSION="${version}" make dist
 
       - name: create release
         id: create_release

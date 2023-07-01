@@ -297,13 +297,3 @@ class ChunkedStream(IteratorMixin, CloseUnderlyingMixin):
                     self._buffer.seek(0)
                     self._underlying.close()
                     self._underlying = None
-
-
-def stream_from_wsgi_environ(environ):
-    if environ.get("CONTENT_LENGTH"):
-        return FiniteLengthStream(environ["wsgi.input"], int(environ["CONTENT_LENGTH"]))
-    elif environ.get("HTTP_TRANSFER_ENCODING") == "chunked":
-        return ChunkedStream(environ["wsgi.input"])
-    else:
-        # terminated by close
-        return environ["wsgi.input"]

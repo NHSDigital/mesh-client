@@ -1,7 +1,5 @@
 import io
-import signal
-import sys
-import traceback
+import os.path
 from typing import List, cast
 from uuid import uuid4
 
@@ -10,57 +8,49 @@ import requests
 from requests import HTTPError
 
 from mesh_client import CombineStreams, MeshClient, MeshError
-from tests.helpers import LOCAL_MOCK_ENDPOINT, default_ssl_opts
-from tests.mock_server import MockMeshApplication, SlowMockMeshApplication
+from tests.helpers import SANDBOX_ENDPOINT, temp_env_vars
+from tests.mesh_client_test import TestError
 
-alice_mailbox = "alice"
+alice_mailbox = "ALICE"
 alice_password = "password"
-bob_mailbox = "bob"
+bob_mailbox = "BOB"
 bob_password = "password"
 
 
-class MockResponse:
-    def __init__(self, json_data, status_code):
-        self.json_data = json_data
-        self.status_code = status_code
-
-    def json(self):
-        return self.json_data
+def sandbox_uri(path: str) -> str:
+    return os.path.join(SANDBOX_ENDPOINT.url, path)
 
 
-def print_stack_frames(signum=None, frame=None):
-    for frame in sys._current_frames().values():
-        traceback.print_stack(frame)
-        print()
+@pytest.fixture(scope="module", autouse=True)
+def _default_vars():
+    with temp_env_vars(MESH_CLIENT_SHARED_KEY="TestKey"):
+        yield
 
 
-signal.signal(signal.SIGUSR1, print_stack_frames)
-
-
-class TestError(Exception):
-    pass
-
-
-@pytest.fixture(scope="function", name="mock_app")
-def _mock_mesh_app():
-    with MockMeshApplication() as mock_app:
-        yield mock_app
+@pytest.fixture(scope="function", autouse=True)
+def _resets():
+    res = requests.delete(sandbox_uri("admin/reset"), verify=SANDBOX_ENDPOINT.verify)
+    res.raise_for_status()
 
 
 @pytest.fixture(scope="function", name="alice")
-def _alice_mesh_client(mock_app: MockMeshApplication):
-    with MeshClient(
-        mock_app.uri, alice_mailbox, alice_password, max_chunk_size=5, **default_ssl_opts  # type: ignore[arg-type]
-    ) as alice:
-        yield alice
+def _alice_client():
+    with MeshClient(SANDBOX_ENDPOINT, alice_mailbox, alice_password, max_chunk_size=5) as client:
+        yield client
 
 
 @pytest.fixture(scope="function", name="bob")
-def _bob_mesh_client(mock_app: MockMeshApplication):
-    with MeshClient(
-        mock_app.uri, bob_mailbox, bob_password, max_chunk_size=5, **default_ssl_opts  # type: ignore[arg-type]
-    ) as bob:
-        yield bob
+def _bob_client():
+    with MeshClient(SANDBOX_ENDPOINT, bob_mailbox, bob_password, max_chunk_size=5) as client:
+        yield client
+
+
+def test_alice_ping(alice: MeshClient):
+    alice.ping()
+
+
+def test_bob_ping(bob: MeshClient):
+    bob.ping()
 
 
 def test_handshake(alice: MeshClient, bob: MeshClient):
@@ -69,13 +59,13 @@ def test_handshake(alice: MeshClient, bob: MeshClient):
 
 
 def test_send_receive(alice: MeshClient, bob: MeshClient):
-    message_id = alice.send_message(bob_mailbox, b"Hello Bob 1")
+    message_id = alice.send_message(bob_mailbox, b"Hello Bob 1", workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     assert bob.count_messages() == 1
     msg = bob.retrieve_message(message_id)
     assert msg.read() == b"Hello Bob 1"
-    assert msg.sender == "alice"
-    assert msg.recipient == "bob"
+    assert msg.sender == "ALICE"
+    assert msg.recipient == "BOB"
     msg.acknowledge()
     assert bob.list_messages() == []
 
@@ -89,13 +79,13 @@ def test_send_receive_combine_streams_part1_multiple_of_chunk_size(alice: MeshCl
         "ContentLength": part1_length + part2_length,
     }
 
-    message_id = alice.send_message(bob_mailbox, stream)
+    message_id = alice.send_message(bob_mailbox, stream, workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     assert bob.count_messages() == 1
     msg = bob.retrieve_message(message_id)
     assert msg.read() == b"H" * part1_length + b"W" * part2_length
-    assert msg.sender == "alice"
-    assert msg.recipient == "bob"
+    assert msg.sender == "ALICE"
+    assert msg.recipient == "BOB"
     msg.acknowledge()
     assert bob.list_messages() == []
 
@@ -109,7 +99,7 @@ def test_send_receive_combine_chunked_small_chunk_size(alice: MeshClient, bob: M
         "ContentLength": part1_length + part2_length,
     }
 
-    message_id = alice.send_message(bob_mailbox, stream)
+    message_id = alice.send_message(bob_mailbox, stream, workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     assert bob.count_messages() == 1
     msg = bob.retrieve_message(message_id)
@@ -125,7 +115,7 @@ def test_send_receive_combine_chunked_override_chunk_size(alice: MeshClient, bob
         "ContentLength": part1_length + part2_length,
     }
 
-    message_id = alice.send_message(bob_mailbox, stream, max_chunk_size=1)
+    message_id = alice.send_message(bob_mailbox, stream, max_chunk_size=1, workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     assert bob.count_messages() == 1
     msg = bob.retrieve_message(message_id)
@@ -141,33 +131,33 @@ def test_send_receive_combine_streams_part1_not_multiple_of_chunk_size(alice: Me
         "ContentLength": part1_length + part2_length,
     }
 
-    message_id = alice.send_message(bob_mailbox, stream)
+    message_id = alice.send_message(bob_mailbox, stream, workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     assert bob.count_messages() == 1
     msg = bob.retrieve_message(message_id)
     assert msg.read() == b"H" * part1_length + b"W" * part2_length
-    assert msg.sender == "alice"
-    assert msg.recipient == "bob"
+    assert msg.sender == "ALICE"
+    assert msg.recipient == "BOB"
     msg.acknowledge()
     assert bob.list_messages() == []
 
 
 def test_line_by_line(alice: MeshClient, bob: MeshClient):
-    message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2")
+    message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2", workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     msg = bob.retrieve_message(message_id)
     assert list(iter(msg)) == [b"Hello Bob 1\n", b"Hello Bob 2"]
 
 
 def test_readline(alice: MeshClient, bob: MeshClient):
-    message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2")
+    message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2", workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     msg = bob.retrieve_message(message_id)
     assert msg.readline() == b"Hello Bob 1\n"
 
 
 def test_readlines(alice: MeshClient, bob: MeshClient):
-    message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2")
+    message_id = alice.send_message(bob_mailbox, b"Hello Bob 1\nHello Bob 2", workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     msg = bob.retrieve_message(message_id)
     assert msg.readlines() == [b"Hello Bob 1\n", b"Hello Bob 2"]
@@ -176,19 +166,19 @@ def test_readlines(alice: MeshClient, bob: MeshClient):
 def test_transparent_compression(alice: MeshClient, bob: MeshClient):
     print("Sending")
     alice._transparent_compress = True
-    message_id = alice.send_message(bob_mailbox, b"Hello Bob Compressed")
+    message_id = alice.send_message(bob_mailbox, b"Hello Bob Compressed", workflow_id=uuid4().hex)
     assert bob.list_messages() == [message_id]
     print("Receiving")
     msg = bob.retrieve_message(message_id)
     assert msg.read() == b"Hello Bob Compressed"
-    assert msg.mex_header("from") == "alice"
+    assert msg.mex_header("from") == "ALICE"
     msg.acknowledge()
     assert bob.list_messages() == []
 
 
 def test_iterate_and_context_manager(alice: MeshClient, bob: MeshClient):
-    alice.send_message(bob_mailbox, b"Hello Bob 2")
-    alice.send_message(bob_mailbox, b"Hello Bob 3")
+    alice.send_message(bob_mailbox, b"Hello Bob 2", workflow_id=uuid4().hex)
+    alice.send_message(bob_mailbox, b"Hello Bob 3", workflow_id=uuid4().hex)
     messages_read = 0
     for msg, expected in zip(bob.iterate_all_messages(), [b"Hello Bob 2", b"Hello Bob 3"]):
         with msg:
@@ -199,7 +189,7 @@ def test_iterate_and_context_manager(alice: MeshClient, bob: MeshClient):
 
 
 def test_context_manager_failure(alice: MeshClient, bob: MeshClient):
-    message_id = alice.send_message(bob_mailbox, b"Hello Bob 4")
+    message_id = alice.send_message(bob_mailbox, b"Hello Bob 4", workflow_id=uuid4().hex)
     try:
         with bob.retrieve_message(message_id) as msg:
             assert msg.read() == b"Hello Bob 4"
@@ -231,7 +221,9 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
         assert msg.encrypted is False
         assert msg.compressed is False
 
-    message_id = alice.send_message(bob_mailbox, b"Hello Bob 5", encrypted=True, compressed=True)
+    message_id = alice.send_message(
+        bob_mailbox, b"Hello Bob 5", encrypted=True, compressed=True, workflow_id=uuid4().hex
+    )
 
     with bob.retrieve_message(message_id) as msg:
         assert msg.encrypted is True
@@ -240,7 +232,7 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
 
 def test_tracking(alice: MeshClient, bob: MeshClient):
     tracking_id = "Message1"
-    msg_id = alice.send_message(bob_mailbox, b"Hello World", local_id=tracking_id)
+    msg_id = alice.send_message(bob_mailbox, b"Hello World", local_id=tracking_id, workflow_id=uuid4().hex)
     assert alice.get_tracking_info(tracking_id)["status"] == "Accepted"
     bob.acknowledge_message(msg_id)
     assert alice.get_tracking_info(tracking_id)["status"] == "Acknowledged"
@@ -254,36 +246,28 @@ def test_msg_id_tracking_message_not_found(alice: MeshClient, bob: MeshClient):
 
 
 def test_msg_id_tracking(alice: MeshClient, bob: MeshClient):
-    msg_id = alice.send_message(bob_mailbox, b"Hello World")
+    msg_id = alice.send_message(bob_mailbox, b"Hello World", workflow_id=uuid4().hex)
     assert alice.get_tracking_info(message_id=msg_id)["status"] == "Accepted"
     bob.acknowledge_message(msg_id)
     assert alice.get_tracking_info(message_id=msg_id)["status"] == "Acknowledged"
 
 
 def test_by_message_id_tracking(alice: MeshClient, bob: MeshClient):
-    msg_id = alice.send_message(bob_mailbox, b"Hello World")
+    msg_id = alice.send_message(bob_mailbox, b"Hello World", workflow_id=uuid4().hex)
     assert alice.track_by_message_id(message_id=msg_id)["status"] == "Accepted"
     bob.acknowledge_message(msg_id)
     assert alice.track_by_message_id(message_id=msg_id)["status"] == "Acknowledged"
 
 
 def test_endpoint_lookup(alice: MeshClient, bob: MeshClient):
-    result = alice.lookup_endpoint("ORG1", "WF1")
+    result = alice.lookup_endpoint("X26", "RESTRICTED_WORKFLOW")
     result_list = cast(List[dict], result["results"])
     assert len(result_list) == 1
-    assert result_list[0]["address"] == "ORG1HC001"
-    assert result_list[0]["description"] == "ORG1 WF1 endpoint"
+    assert result_list[0]["address"] == "BOB"
+    assert result_list[0]["description"] == "TESTMB2"
     assert result_list[0]["endpoint_type"] == "MESH"
 
 
 def test_error_handling(alice: MeshClient, bob: MeshClient):
     with pytest.raises(MeshError):
         alice.send_message(bob_mailbox, b"")
-
-
-def test_timeout():
-    with SlowMockMeshApplication() as mock_app:
-        endpoint = LOCAL_MOCK_ENDPOINT._replace(url=mock_app.uri)
-        with pytest.raises(requests.exceptions.Timeout):
-            with MeshClient(endpoint, alice_mailbox, alice_password, max_chunk_size=5, timeout=0.5) as client:
-                client.list_messages()

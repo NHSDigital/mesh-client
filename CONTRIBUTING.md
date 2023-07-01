@@ -34,6 +34,11 @@ source .venv/bin/activate
 
 ### running tests
 
+start the mesh-sandbox docker container
+```shell
+make up
+```
+
 ```shell
 make test
 ```
@@ -76,4 +81,13 @@ lint checks will fail if the code is not formaated correctly
 make black
 ```
 
+
+### secrets
+the git-secrets script will try and avoid accidental committing of secrets
+patterns are excluded using  [.gitdisallowed](.gitdisallowed) and allow listed using  [.gitallowed](.gitallowed)
+if the git hooks are registered `make refresh hooks`  then secrets will be scanned for in the [pre-commit hook](scripts/hooks/pre-commit.sh).
+You can check for secrets / test patterns at any time though with
+```shell
+make check-secrets-all
+```
 

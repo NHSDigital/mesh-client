@@ -37,6 +37,13 @@ with MeshClient(
     client.send_message('RECIPIENT_MAILBOX', b'Hello World!', subject='Important message')
 ```
 
+Testing your application
+------------------------
+
+We recommend using the [mesh sandbox](https://github.com/NHSDigital/mesh-sandbox) 
+have a look at this [docker-compose.yml](docker-compose.yml) for an example of how to run the sandbox
+
+
 Guidance for contributors
 -------------------------
 

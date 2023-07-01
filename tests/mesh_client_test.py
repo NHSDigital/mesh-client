@@ -2,6 +2,7 @@ import io
 import signal
 import sys
 import traceback
+from typing import List, cast
 
 import pytest
 import requests
@@ -51,13 +52,17 @@ def _mock_mesh_app():
 
 @pytest.fixture(scope="function", name="alice")
 def _alice_mesh_client(mock_app: MockMeshApplication):
-    with MeshClient(mock_app.uri, alice_mailbox, alice_password, max_chunk_size=5, **default_ssl_opts) as alice:
+    with MeshClient(
+        mock_app.uri, alice_mailbox, alice_password, max_chunk_size=5, **default_ssl_opts  # type: ignore[arg-type]
+    ) as alice:
         yield alice
 
 
 @pytest.fixture(scope="function", name="bob")
 def _bob_mesh_client(mock_app: MockMeshApplication):
-    with MeshClient(mock_app.uri, bob_mailbox, bob_password, max_chunk_size=5, **default_ssl_opts) as bob:
+    with MeshClient(
+        mock_app.uri, bob_mailbox, bob_password, max_chunk_size=5, **default_ssl_opts  # type: ignore[arg-type]
+    ) as bob:
         yield bob
 
 
@@ -260,7 +265,7 @@ def test_by_message_id_tracking(alice: MeshClient, bob: MeshClient):
 
 def test_endpoint_lookup(alice: MeshClient, bob: MeshClient):
     result = alice.lookup_endpoint("ORG1", "WF1")
-    result_list = result["results"]
+    result_list = cast(List[dict], result["results"])
     assert len(result_list) == 1
     assert result_list[0]["address"] == "ORG1HC001"
     assert result_list[0]["description"] == "ORG1 WF1 endpoint"

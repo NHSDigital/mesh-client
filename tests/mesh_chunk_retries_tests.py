@@ -25,7 +25,12 @@ def _mock_mesh_app():
 @pytest.fixture(scope="function", name="alice")
 def _alice_mesh_client(mock_app: MockMeshChunkRetryApplication):
     with MeshClient(
-        mock_app.uri, alice_mailbox, alice_password, max_chunk_size=5, max_chunk_retries=3, **default_ssl_opts
+        mock_app.uri,
+        alice_mailbox,
+        alice_password,
+        max_chunk_size=5,
+        max_chunk_retries=3,
+        **default_ssl_opts,  # type: ignore[arg-type]
     ) as alice:
         yield alice
 
@@ -33,7 +38,12 @@ def _alice_mesh_client(mock_app: MockMeshChunkRetryApplication):
 @pytest.fixture(scope="function", name="bob")
 def _bob_mesh_client(mock_app: MockMeshChunkRetryApplication):
     with MeshClient(
-        mock_app.uri, bob_mailbox, bob_password, max_chunk_size=5, max_chunk_retries=3, **default_ssl_opts
+        mock_app.uri,
+        bob_mailbox,
+        bob_password,
+        max_chunk_size=5,
+        max_chunk_retries=3,
+        **default_ssl_opts,  # type: ignore[arg-type]
     ) as bob:
         yield bob
 

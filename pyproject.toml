@@ -108,9 +108,9 @@ python =
 deps=requests>=2.9.0
      six>=1.10.0
      mock
+     pytest
 commands =
-    python --version
-    python -m unittest discover . '*_test.py'
+    python -m pytest
 
 """
 

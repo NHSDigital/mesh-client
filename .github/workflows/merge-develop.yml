@@ -86,9 +86,9 @@ jobs:
           report_paths: reports/junit/*.xml
 
 #
-#  publish:
+#  publish release:
 #    runs-on: ubuntu-latest
-#    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'tag release version:')
+#    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
 #    steps:
 #      - name: checkout
 #        uses: actions/checkout@v3

@@ -1,8 +1,8 @@
-name: test-publish
+name: test-publish-2
 on:
   push:
     branches:
-      - mm-mesh-1478-move-to-pyproject-toml
+      - mm-mesh-1478-move-to-pyproject-toml-2
 
 #  push:
 #    tags:

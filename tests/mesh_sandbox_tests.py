@@ -9,7 +9,7 @@ from requests import HTTPError
 
 from mesh_client import CombineStreams, MeshClient, MeshError
 from tests.helpers import SANDBOX_ENDPOINT, temp_env_vars
-from tests.mesh_client_test import TestError
+from tests.mesh_client_tests import TestError
 
 alice_mailbox = "ALICE"
 alice_password = "password"
@@ -43,6 +43,13 @@ def _alice_client():
 def _bob_client():
     with MeshClient(SANDBOX_ENDPOINT, bob_mailbox, bob_password, max_chunk_size=5) as client:
         yield client
+
+
+def test_get_version():
+    from mesh_client import __version__
+
+    assert __version__ != "unknown"
+    assert __version__ != "0.0.0"
 
 
 def test_alice_ping(alice: MeshClient):

@@ -63,6 +63,13 @@ def _bob_mesh_client(mock_app: MockMeshApplication):
         yield bob
 
 
+def test_get_version():
+    from mesh_client import __version__
+
+    assert __version__ != "unknown"
+    assert __version__ != "0.0.0"
+
+
 def test_handshake(alice: MeshClient, bob: MeshClient):
     hand_shook = alice.handshake()
     assert hand_shook == b"hello"

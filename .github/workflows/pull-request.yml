@@ -111,7 +111,7 @@ jobs:
         with:
           path: |
             .venv
-          key: ${{ runner.os }}-poetry-v2-py3.8-${{ hashFiles('./poetry.lock') }}
+          key: ${{ runner.os }}-v3-poetry-py3.8-${{ hashFiles('./poetry.lock') }}
 
       - name: git reset
         run: git reset --hard
@@ -229,7 +229,7 @@ jobs:
         with:
           path: |
             .venv
-          key: ${{ runner.os }}-poetry-v2-py3.8-${{ hashFiles('./poetry.lock') }}
+          key: ${{ runner.os }}-v3-poetry-py3.8-${{ hashFiles('./poetry.lock') }}
 
       - name: git reset
         run: git reset --hard
@@ -262,66 +262,3 @@ jobs:
           version="v$(poetry version patch | rev | cut -d' ' -f1 | rev)"
           echo "RELEASE_VERSION=$version" >> $GITHUB_ENV
           echo "${version}"
-
-  publish:
-    runs-on: ubuntu-latest
-    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]'
-    needs:
-      - coverage
-      - lint
-      - tox
-    steps:
-      - name: checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: print branch info
-        run: |
-          git branch
-          echo "GITHUB_HEAD_REF=${GITHUB_HEAD_REF}"
-          echo "GITHUB_BASE_REF=${GITHUB_BASE_REF}"
-          git log --oneline -n 10
-
-      - name: clean
-        run: |
-          git clean -fdx
-          find . -type f | xargs chmod g+w
-
-      - name: merge into base_branch
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
-          git checkout "${{ github.base_ref }}"
-          git checkout -b "merging-${{ github.event.number }}"
-          git merge --ff-only "${{ github.event.pull_request.head.sha }}"
-
-      - name: setup python
-        uses: actions/setup-python@v3
-        with:
-          python-version: "3.8"
-
-      - name: setup poetry
-        uses: abatilo/actions-poetry@v2
-        with:
-          poetry-version: 1.5.1
-
-      - name: add poetry plugins
-        run: |
-          poetry self add "poetry-dynamic-versioning[plugin]"
-
-      - name: build dist
-        run: |
-          version="v$(poetry version | rev | cut -d' ' -f1 | rev)"
-          echo $version
-          echo "RELEASE_VERSION=$version" >> $GITHUB_ENV
-          git tag "${version}"
-          RELEASE_VERSION="${version}" make dist
-          ls -l dist
-
-      - name: test publish
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
-          repository-url: https://test.pypi.org/legacy/

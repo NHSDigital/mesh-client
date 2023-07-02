@@ -34,7 +34,7 @@ jobs:
         with:
           path: |
             .venv
-          key: ${{ runner.os }}-poetry-v2-py3.8-${{ hashFiles('./poetry.lock') }}
+          key: ${{ runner.os }}-v3-poetry-py3.8-${{ hashFiles('./poetry.lock') }}
 
       - name: git reset
         run: git reset --hard

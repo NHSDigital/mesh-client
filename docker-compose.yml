@@ -22,5 +22,5 @@ services:
     volumes:
       - ./tests/mailboxes.jsonl:/app/mesh_sandbox/store/data/mailboxes.jsonl:ro
       - ./tests/workflows.jsonl:/app/mesh_sandbox/store/data/workflows.jsonl:ro
-      - ./tests/server.bundle.pem:/tmp/server-cert.pem:ro
+      - ./tests/server.cert.pem:/tmp/server-cert.pem:ro
       - ./tests/server.key.pem:/tmp/server-cert.key:ro

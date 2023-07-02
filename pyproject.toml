@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "Mesh Client"
+name = "Mesh-Client"
 version = "0.0.0"
 description = "Client for NHS England's MESH messaging system"
 repository = "https://github.com/NHSDigital/mesh-client"
@@ -57,7 +57,7 @@ ipython = {version = "^8.14.0", python = ">=3.9,<4.0"}
 [tool.pytest.ini_options]
 #asyncio_mode = "auto"
 python_classes = "NoTestClassesPlease"
-python_files = "*_test.py test_*.py"
+python_files = "*_testz.py test_*.py *_tests.py"
 norecursedirs = ".git .venv .eggs build dist terraform features"
 
 [tool.black]
@@ -105,11 +105,19 @@ python =
     3.10: py310
     3.11: py311
 
+[testenv:.pkg]
+set_env =
+    RELEASE_VERSION=1.2.3
+
 [testenv]
-deps=requests>=2.9.0
-     six>=1.10.0
-     mock
-     pytest
+wheel_build_env = .pkg
+use_develop = true
+package = wheel
+deps =
+    requests>=2.9.0
+    six>=1.10.0
+    mock
+    pytest
 commands =
     python -m pytest
 

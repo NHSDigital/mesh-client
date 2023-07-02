@@ -21,7 +21,7 @@ with open(join(dirname(__file__), poetry_cfg["readme"]), "r") as f:
 
 setup(
     name=poetry_cfg["name"],
-    version=os.environ.get("RELEASE_VERSION", "0.0.0"),
+    version=os.environ.get("RELEASE_VERSION", poetry_cfg["version"]),
     description=poetry_cfg["description"],
     url=poetry_cfg["repository"],
     long_description=long_description,

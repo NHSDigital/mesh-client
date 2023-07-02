@@ -5,6 +5,7 @@ import hmac
 import os.path
 import platform
 import ssl
+import sys
 import time
 import uuid
 import warnings
@@ -15,7 +16,6 @@ from itertools import chain
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import quote as q
 
-import importlib_metadata
 import requests
 from requests.adapters import HTTPAdapter
 
@@ -34,8 +34,25 @@ from .types import (
     TrackingResponse_v1,
 )
 
-__version__ = importlib_metadata.distribution("mesh client")
+if sys.version_info[:2] >= (3, 8):
+    # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
+    from importlib.metadata import PackageNotFoundError, version
+else:
+    from importlib_metadata import PackageNotFoundError, version
 
+
+def _get_version(*names: str) -> str:
+    """ """
+    for name in names:
+        try:
+            pkg_version = version(name)
+            return pkg_version
+        except PackageNotFoundError:
+            continue
+    return "unknown"
+
+
+__version__ = _get_version("mesh-client")
 
 _PACKAGE_DIR = os.path.dirname(__file__)
 
@@ -176,8 +193,8 @@ class MeshClient(object):
         max_chunk_size=75 * 1024 * 1024,
         proxies: Optional[Dict[str, str]] = None,
         transparent_compress: bool = False,
-        max_chunk_retries=0,
-        timeout=10 * 60,
+        max_chunk_retries: int = 0,
+        timeout: Union[int | float] = 10 * 60,
     ):
         """
         Create a new MeshClient.

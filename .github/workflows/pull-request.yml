@@ -1,0 +1,264 @@
+name: pull-request
+on:
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+
+  tox:
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+
+    runs-on: ubuntu-latest
+    if: github.repository == 'NHSDigital/mesh-client'
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: print branch info
+        run: |
+          git branch
+          echo "GITHUB_HEAD_REF=${GITHUB_HEAD_REF}"
+          echo "GITHUB_BASE_REF=${GITHUB_BASE_REF}"
+          git log --oneline -n 10
+
+      - name: clean
+        run: |
+          git clean -fdx
+          find . -type f | xargs chmod g+w
+
+      - name: merge into base_branch
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo base branch "${{ github.base_ref }}"
+          echo pr branch "${{ github.head_ref }}"
+          git checkout "${{ github.base_ref }}"
+          git checkout -b "merging-${{ github.event.number }}"
+          git merge --ff-only "${{ github.event.pull_request.head.sha }}"
+
+      - name: setup python
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: start docker containers
+        run: make up
+
+      - name: install dependencies
+        run: pip install tox tox-gh-actions
+
+      - name: tox
+        run: tox
+
+      - name: stop docker containers
+        if: success() || failure()
+        run: make down
+
+
+  coverage:
+    runs-on: ubuntu-latest
+    if: github.repository == 'NHSDigital/mesh-client'
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: print branch info
+        run: |
+          git branch
+          echo "GITHUB_HEAD_REF=${GITHUB_HEAD_REF}"
+          echo "GITHUB_BASE_REF=${GITHUB_BASE_REF}"
+          git log --oneline -n 10
+
+      - name: clean
+        run: |
+          git clean -fdx
+          find . -type f | xargs chmod g+w
+
+      - name: secrets-check
+        run: make check-secrets
+
+      - name: merge into base_branch
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo base branch "${{ github.base_ref }}"
+          echo pr branch "${{ github.head_ref }}"
+          git checkout "${{ github.base_ref }}"
+          git checkout -b "merging-${{ github.event.number }}"
+          git merge --ff-only "${{ github.event.pull_request.head.sha }}"
+
+      - name: setup python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.8"
+
+      - name: setup poetry
+        uses: abatilo/actions-poetry@v2
+        with:
+          poetry-version: 1.5.1
+
+      - name: add poetry plugins
+        run: |
+          poetry self add "poetry-dynamic-versioning[plugin]"
+
+      - name: cache virtualenv
+        uses: actions/cache@v3
+        with:
+          path: |
+            .venv
+          key: ${{ runner.os }}-v3-poetry-py3.8-${{ hashFiles('./poetry.lock') }}
+
+      - name: git reset
+        run: git reset --hard
+
+      - name: install dependencies
+        run: make install-ci
+
+      - name: black
+        run: make black-check
+
+      - name: start docker containers
+        run: make up
+
+      - name: code coverage
+        run: make coverage-ci
+
+      - name: code coverage report
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: orgoro/coverage@32a2af98e56f47d958cf4c64b1f5e02161f2853e
+        with:
+          coverageFile: reports/coverage.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          thresholdAll: 0.70
+
+      - name: setup java
+        if: github.actor != 'dependabot[bot]' && (success() || failure())
+        uses: actions/setup-java@v3
+        with:
+          distribution: "corretto"
+          java-version: "17"
+
+#      - name: provision sonar-scanner
+#        if: github.actor != 'dependabot[bot]' && (success() || failure())
+#        run: |
+#          export SONAR_VERSION="4.7.0.2747"
+#          wget -q "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
+#          unzip -q ./sonar-scanner.zip
+#          mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
+#          scripts/sonar_tests.py
+#
+#      - name: run sonar scan
+#        if: github.actor != 'dependabot[bot]' && (success() || failure())
+#        run: |
+#          PATH="$PWD/sonar-scanner/bin:$PATH"
+#          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+#            git checkout "${GITHUB_HEAD_REF}"
+#            sonar-scanner -Dsonar.pullrequest.branch="{{ github.event.pull_request.head.sha }}" -Dsonar.pullrequest.base="{{ github.event.pull_request.base.sha }}" -Dsonar.pullrequest.key="${{ github.event.number }}"
+#          else
+#            sonar-scanner
+#          fi
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+
+      - name: archive reports
+        if: github.actor != 'dependabot[bot]' && (success() || failure())
+        uses: actions/upload-artifact@v3
+        with:
+          name: reports
+          path: reports/**/*
+
+      - name: publish junit reports
+        if: success() || failure()
+        uses: mikepenz/action-junit-report@v3
+        with:
+          check_name: junit reports
+          report_paths: reports/junit/*.xml
+
+      - name: stop docker containers
+        if: success() || failure()
+        run: make down
+
+  lint:
+    runs-on: ubuntu-latest
+    if: github.repository == 'NHSDigital/mesh-client'
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: clean
+        run: |
+          git clean -fdx
+
+      - name: secrets-check
+        run: make check-secrets
+
+      - name: merge into base_branch
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo base branch "${{ github.base_ref }}"
+          echo pr branch "${{ github.head_ref }}"
+          git checkout "${{ github.base_ref }}"
+          git checkout -b "merging-${{ github.event.number }}"
+          git merge --ff-only "${{ github.event.pull_request.head.sha }}"
+
+      - name: setup python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.8"
+
+      - name: setup poetry
+        uses: abatilo/actions-poetry@v2
+        with:
+          poetry-version: 1.5.1
+
+      - name: add poetry plugins
+        run: |
+          poetry self add "poetry-dynamic-versioning[plugin]"
+
+      - name: cache virtualenv
+        uses: actions/cache@v3
+        with:
+          path: |
+            .venv
+          key: ${{ runner.os }}-v3-poetry-py3.8-${{ hashFiles('./poetry.lock') }}
+
+      - name: git reset
+        run: git reset --hard
+
+      - name: install dependencies
+        run: make install-ci
+
+      - name: black
+        run: make black-check
+
+      - name: isort
+        run: make isort-check
+
+      - name: flake8
+        run: make flake8
+
+      - name: mypy
+        run: make mypy
+
+      - name: shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          ignore_paths: .venv build
+          ignore_names: git-secrets
+        env:
+          SHELLCHECK_OPTS: -f gcc -e SC1090,SC1091
+
+      - name: test next version
+        run: |
+          version="v$(poetry version patch | rev | cut -d' ' -f1 | rev)"
+          echo "RELEASE_VERSION=$version" >> $GITHUB_ENV
+          echo "${version}"

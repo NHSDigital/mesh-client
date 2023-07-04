@@ -1,0 +1,36 @@
+
+token: \$\{\{ secrets.GITHUB_TOKEN \}\}
+token = self.generate_token()
+password: \$\{\{ secrets.PYPI_TOKEN \}\}
+password: \$\{\{ secrets.TEST_PYPI_TOKEN \}\}
+mesh_client/__init__.py:..*password: str
+mesh_client/nhs-dep-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-dep-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-dev-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-dev-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-digicert-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-digicert-ca-bundle.pem:28:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-digicert-ca-bundle.pem:50:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-digicert-root-ca.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-digicert-root-ca.pem:28:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-ig-int-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-ig-int-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-ig-live-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-ig-live-ca-bundle.pem:25:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-int-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-int-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-live-root-ca.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-opt-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-opt-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-train-ca-bundle.pem:1:-----BEGIN CERTIFICATE-----
+mesh_client/nhs-train-ca-bundle.pem:22:-----BEGIN CERTIFICATE-----
+tests/ca.cert.pem:1:-----BEGIN CERTIFICATE-----
+tests/ca.key.pem:1:-----BEGIN RSA PRIVATE KEY-----
+tests/ca.key.pem:51:-----END RSA PRIVATE KEY-----
+tests/client.cert.pem:1:-----BEGIN CERTIFICATE-----
+tests/client.key.pem:1:-----BEGIN RSA PRIVATE KEY-----
+tests/client.key.pem:51:-----END RSA PRIVATE KEY-----
+tests/server.cert.pem:1:-----BEGIN CERTIFICATE-----
+tests/server.key.pem:1:-----BEGIN RSA PRIVATE KEY-----
+tests/server.key.pem:51:-----END RSA PRIVATE KEY-----
+tests/mailboxes.jsonl:.*"password": "password"

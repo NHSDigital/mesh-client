@@ -1,0 +1,3 @@
+{"mailbox_id":  "ALICE", "mailbox_name": "TESTMB1", "billing_entity": "England", "ods_code": "X26", "org_code": "X26", "password": "password"}
+{"mailbox_id":  "BOB", "mailbox_name": "TESTMB2", "billing_entity": "Wales", "ods_code": "X26", "org_code": "X26", "password": "password"}
+{"mailbox_id":  "BARRY", "mailbox_name": "TESTMB3", "billing_entity": "England", "ods_code": "X27", "org_code": "X27", "password": "password"}

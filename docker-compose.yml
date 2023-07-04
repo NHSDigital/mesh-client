@@ -1,0 +1,26 @@
+version: '3.9'
+
+services:
+
+  mesh_sandbox:
+    build:
+      context: https://github.com/NHSDigital/mesh-sandbox.git#refs/tags/v1.0.4
+    ports:
+      - "8701:443"
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    healthcheck:
+      test: curl -sf http://localhost:80/health || exit 1
+      interval: 3s
+      timeout: 10s
+    environment:
+      - SHARED_KEY=TestKey
+      - STORE_MODE=memory
+      - SSL=yes
+    volumes:
+      - ./tests/mailboxes.jsonl:/app/mesh_sandbox/store/data/mailboxes.jsonl:ro
+      - ./tests/workflows.jsonl:/app/mesh_sandbox/store/data/workflows.jsonl:ro
+      - ./tests/server.cert.pem:/tmp/server-cert.pem:ro
+      - ./tests/server.key.pem:/tmp/server-cert.key:ro

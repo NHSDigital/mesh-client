@@ -7,7 +7,7 @@ Installation
 ------------
 
 ```bash
-pip install mesh_client
+pip install mesh-client
 ```
 
 Example use
@@ -18,7 +18,7 @@ from mesh_client import MeshClient, NHS_DEP_ENDPOINT
 with MeshClient(
           NHS_DEP_ENDPOINT,
           'MYMAILBOX',
-          'Password123!',
+          'Password',
           cert=('/etc/certs/cert.pem', '/etc/certs/key.pem')  # Mesh uses SSL, so you'll need some certs
         ) as client:
 
@@ -37,44 +37,15 @@ with MeshClient(
     client.send_message('RECIPIENT_MAILBOX', b'Hello World!', subject='Important message')
 ```
 
+Testing your application
+------------------------
+
+We recommend using the [mesh sandbox](https://github.com/NHSDigital/mesh-sandbox) 
+have a look at this [docker-compose.yml](docker-compose.yml) for an example of how to run the sandbox
+
+
 Guidance for contributors
 -------------------------
 
-You should be doing all your development in a virtualenv / venv. You can install
-everything you need for development with
+see [CONTRIBUTING](CONTRIBUTING.md)
 
-```bash
-virtualenv .venv
-source .venv/bin/activate
-pip install -r dev-requirements.txt
-pip install -e .
-
-# if using asdf
-pip install tox-asdf
-
-```
-
-We use unittest for tests, and you can run the test suite locally with:
-
-```bash
-python -m unittest discover . '*_test.py'
-```
-
-We use tox for testing on multiple versions. To run the tox tests, just run:
-
-```bash
-tox
-```
-
-For releases, we use twine. The rough release process would be:
-
-```bash
-tox  # Re-run tests, just to be sure
-git tag $CURRENT_VERSION
-rm dist/*  # Get rid of previous distribution files
-python -m build
-twine upload -r testpypi dist/*
-# Check artifacts are uploaded correctly, and that entry on PyPI looks correct
-twine upload dist/*
-git push --tags
-```

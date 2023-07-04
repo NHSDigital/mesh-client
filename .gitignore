@@ -1,12 +1,60 @@
-__pycache__/
-*.pyc
-/MANIFEST
-/.tox/
-.idea/
-.venv/
+# IDE and various other developer tools
+.idea
+.ipynb_checkpoints
+*.swp
+
+# Misc
+!.gitkeep
+*.orig
+.server.env
+.certs.env
+.docker.env
+.github-artifacts
+scanner
+.scannerwork
+.vscode/*.log
+coverage.xml
+.coverage.*
+
+# Packaging
 build/
-help/
-*.whl
-*.egg-info
 dist/
-.eggs/
+reports/
+
+
+# Python
+.env
+.venv
+venv
+*.pyc
+__pycache__
+.mypy_cache
+**/.pytest_cache/
+.python-version
+.coverage
+.coverage-out/
+.tox
+.eggs
+*.egg-info/
+
+# certs/keys/pems
+*.crt
+*.csr
+*.key
+*.pem
+*.pfx
+*.srl*
+*.csr.cfg
+*id_rsa*
+
+# mailbox passwords etc.
+*secrets.json
+*.keystore
+
+# Big binaries
+*.bz2
+*.gz
+*.jar
+*.tar.gz
+*.tgz
+*.zip

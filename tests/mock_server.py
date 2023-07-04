@@ -42,8 +42,6 @@ _OPTIONAL_HEADERS = {
     "HTTP_MEX_FILENAME": "Mex-FileName",
     "HTTP_MEX_LOCALID": "Mex-LocalID",
     "HTTP_MEX_MESSAGETYPE": "Mex-MessageType",
-    "HTTP_MEX_PROCESSID": "Mex-ProcessID",
-    "HTTP_MEX_PROCESSLID": "Mex-ProcesslID",
     "HTTP_MEX_SUBJECT": "Mex-Subject",
     "HTTP_MEX_CONTENT_ENCRYPTED": "Mex-Content-Encrypted",
     "HTTP_MEX_CONTENT_COMPRESS": "Mex-Content-Compress",
@@ -259,7 +257,8 @@ class MockMeshApplication:
                     }
                 ).encode("utf-8")
             ]
-        headers = {_OPTIONAL_HEADERS[key]: value for key, value in environ.items() if key in _OPTIONAL_HEADERS}
+        headers = {"Content-Type": "application/octet-stream"}  # defaults
+        headers.update({_OPTIONAL_HEADERS[key]: value for key, value in environ.items() if key in _OPTIONAL_HEADERS})
         msg_id = self.make_message_id()
         headers["Mex-MessageID"] = msg_id
         mailbox[msg_id] = {"headers": headers, "data": data}
@@ -291,7 +290,7 @@ class MockMeshApplication:
             start_response(
                 "200 OK",
                 [
-                    ("Content-Type", "application/octet-stream"),
+                    ("Content-Type", msg["headers"]["Content-Type"]),
                     ("Content-Encoding", "gzip"),
                     ("Mex-Chunk-Range", chunk_header),
                 ],

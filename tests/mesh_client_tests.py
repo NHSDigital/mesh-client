@@ -83,6 +83,7 @@ def test_send_receive(alice: MeshClient, bob: MeshClient):
     assert msg.read() == b"Hello Bob 1"
     assert msg.sender == "alice"
     assert msg.recipient == "bob"
+    assert msg.content_type == "application/octet-stream"
     msg.acknowledge()
     assert bob.list_messages() == []
 

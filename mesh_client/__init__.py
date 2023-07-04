@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
 from itertools import chain
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, cast
 from urllib.parse import quote as q
 
 import requests
@@ -76,6 +76,7 @@ _OPTIONAL_HEADERS = {
     "encrypted": "Mex-Content-Encrypted",
     "compressed": "Mex-Content-Compressed",
     "checksum": "Mex-Content-Checksum",
+    "content_type": "Content-Type",
 }
 
 _BOOLEAN_HEADERS = {"compressed", "encrypted"}
@@ -194,7 +195,7 @@ class MeshClient(object):
         proxies: Optional[Dict[str, str]] = None,
         transparent_compress: bool = False,
         max_chunk_retries: int = 0,
-        timeout: Union[int | float] = 10 * 60,
+        timeout: Union[int, float] = 10 * 60,
     ):
         """
         Create a new MeshClient.
@@ -297,7 +298,7 @@ class MeshClient(object):
         response.raise_for_status()
         return cast(int, response.json()["count"])
 
-    def track_by_message_id(self, message_id=None) -> TrackingResponse_v1:
+    def track_by_message_id(self, message_id: str) -> TrackingResponse_v1:
         """
         Gets tracking information from MESH about a message, by its  message id.
         Returns a dictionary, in much the same format that MESH provides it.
@@ -308,12 +309,12 @@ class MeshClient(object):
         response.raise_for_status()
         return cast(TrackingResponse_v1, response.json())
 
-    def _get_tracking_url(self, tracking_id: Optional[str] = None, message_id: Optional[str] = None) -> str:
+    def _get_tracking_url(self, local_id: Optional[str] = None, message_id: Optional[str] = None) -> str:
         if message_id:
             return f"{self.mailbox_url}/outbox/tracking?messageID={q(message_id)}"
 
-        if tracking_id:
-            return f"{self.mailbox_url}/outbox/tracking/{q(tracking_id)}"
+        if local_id:
+            return f"{self.mailbox_url}/outbox/tracking/{q(local_id)}"
 
         raise ValueError(
             "Exactly one of local message id (called tracking_id, for historical reasons) "
@@ -322,14 +323,14 @@ class MeshClient(object):
 
     @deprecated(reason="tracking by local_id is deprecated, please use 'track_by_message_id'")
     def get_tracking_info(
-        self, tracking_id: Optional[str] = None, message_id: Optional[str] = None
+        self, local_id: Optional[str] = None, message_id: Optional[str] = None
     ) -> TrackingResponse_v1:
         """
         Gets tracking information from MESH about a message, by its local message id.
         Returns a dictionary, in much the same format that MESH provides it.
         """
 
-        url = self._get_tracking_url(tracking_id, message_id)
+        url = self._get_tracking_url(local_id, message_id)
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
@@ -355,7 +356,7 @@ class MeshClient(object):
         response.raise_for_status()
         return cast(ListMessageResponse_v1, response.json())["messages"]
 
-    def retrieve_message(self, message_id):
+    def retrieve_message(self, message_id: str):
         """
         Retrieve a message based on its message_id. This will return a Message
         object
@@ -369,7 +370,7 @@ class MeshClient(object):
         response.raise_for_status()
         return Message(message_id, response, self)
 
-    def retrieve_message_chunk(self, message_id, chunk_num):
+    def retrieve_message_chunk(self, message_id: str, chunk_num: Union[int, str]):
         response = self._session.get(
             f"{self.mailbox_url}/inbox/{q(message_id)}/{chunk_num}",
             stream=True,
@@ -378,7 +379,13 @@ class MeshClient(object):
         response.raise_for_status()
         return response
 
-    def send_message(self, recipient, data, max_chunk_size=None, **kwargs) -> str:
+    def send_message(
+        self,
+        recipient: str,
+        data,
+        max_chunk_size: Optional[int] = None,
+        **kwargs,
+    ) -> str:
         """
         Send a message to recipient containing data.
 
@@ -391,7 +398,6 @@ class MeshClient(object):
         filename
         local_id
         message_type
-        process_id
         subject
         encrypted
         compressed
@@ -401,8 +407,6 @@ class MeshClient(object):
         message_id
         version
         partner_id
-        recipient_smtp
-        sender_smtp
 
         Note that compressed refers to *non-transparent* compression - the
         client will not attempt to compress or decompress data. Transparent
@@ -509,7 +513,7 @@ class MeshClient(object):
 
         return message_id
 
-    def acknowledge_message(self, message_id):
+    def acknowledge_message(self, message_id: str):
         """
         Acknowledge a message_id, deleting it from MESH.
         """
@@ -562,6 +566,7 @@ class _MessageAttrs:
     message_id: str
     message_type: str
     recipient: str
+    content_type: str
     sender: Optional[str] = None
 
     workflow_id: Optional[str] = None
@@ -573,6 +578,9 @@ class _MessageAttrs:
     subject: Optional[str] = None
     encrypted: Optional[Union[str, bool]] = None
     compressed: Optional[Union[str, bool]] = None
+
+
+TDefault = TypeVar("TDefault")
 
 
 class _BaseMessage:
@@ -589,14 +597,17 @@ class _BaseMessage:
     filename
     local_id
     message_type
-    process_id
     subject
     encrypted
     compressed
+    checksum
+    content_type
 
     Note that compressed refers to *non-transparent* compression - the
-    client will not attempt to compress or decompress data. Transparent
+    client will not attempt to compress or decompress data. Transparent (Content-Encoding)
     compression is handled automatically, with no intervention needed.
+    This is merely a header that is passed through to let the recipient know the decoded content is further compressed.
+
 
     Messages have a read method, and will handle chunking and transparent
     compression automatically. Once the data has been read, you must close the
@@ -677,7 +688,7 @@ class _BaseMessage:
         """
         self._client.acknowledge_message(self._msg_id)
 
-    def mex_header(self, key, default=None):
+    def mex_header(self, key: str, default: Optional[TDefault] = None) -> Union[str, TDefault]:
         """get a mex header if present
 
         Args:
@@ -715,7 +726,7 @@ class Message(_BaseMessage, _MessageAttrs):
 
 
 class AuthTokenGenerator(object):
-    def __init__(self, key, mailbox, password):
+    def __init__(self, key: bytes, mailbox: str, password: str):
         self._key = key
         self._mailbox = mailbox
         self._password = password
@@ -734,8 +745,8 @@ class AuthTokenGenerator(object):
 
     def generate_token(self) -> str:
         now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M")
-        public_auth_data = _combine(self._mailbox, self._nonce, self._nonce_count, now)
-        private_auth_data = _combine(self._mailbox, self._nonce, self._nonce_count, self._password, now)
+        public_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{now}"
+        private_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{self._password}:{now}"
         myhash = hmac.HMAC(self._key, private_auth_data.encode("ASCII"), sha256).hexdigest()
         self._nonce_count += 1
         return f"NHSMESH {public_auth_data}:{myhash}"
@@ -743,7 +754,3 @@ class AuthTokenGenerator(object):
 
 # Preserve old name, even though it's part of the API now
 _AuthTokenGenerator = AuthTokenGenerator
-
-
-def _combine(*elements):
-    return ":".join(str(x) for x in elements)

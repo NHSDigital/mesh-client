@@ -18,7 +18,7 @@ from mesh_client import MeshClient, NHS_DEP_ENDPOINT
 with MeshClient(
           NHS_DEP_ENDPOINT,
           'MYMAILBOX',
-          'Password123!',
+          'Password',
           cert=('/etc/certs/cert.pem', '/etc/certs/key.pem')  # Mesh uses SSL, so you'll need some certs
         ) as client:
 

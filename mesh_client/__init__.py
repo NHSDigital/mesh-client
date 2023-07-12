@@ -15,9 +15,11 @@ from io import BytesIO
 from itertools import chain
 from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, cast
 from urllib.parse import quote as q
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 
 from .io_helpers import (
     CombineStreams,
@@ -91,16 +93,36 @@ _RECEIVE_HEADERS = {
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
 
 
-Endpoint = collections.namedtuple("Endpoint", ["url", "verify", "cert", "check_hostname"])
+Endpoint = collections.namedtuple(
+    "Endpoint", ["url", "verify", "cert", "check_hostname", "hostname_checks_common_name"]
+)
 
-NHS_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", INT_CA_CERT, None, False)
-NHS_DEV_ENDPOINT = Endpoint("https://msg.dev.spine2.ncrs.nhs.uk", DEV_CA_CERT, None, False)
-NHS_DEP_ENDPOINT = Endpoint("https://msg.dep.spine2.ncrs.nhs.uk", DEP_CA_CERT, None, False)
-NHS_TRAIN_ENDPOINT = Endpoint("https://msg.train.spine2.ncrs.nhs.uk", TRAIN_CA_CERT, None, False)
-NHS_LIVE_ENDPOINT = Endpoint("https://mesh-sync.national.ncrs.nhs.uk", LIVE_CA_CERT, None, False)
-NHS_OPENTEST_ENDPOINT = Endpoint("https://192.168.128.11", OPENTEST_CA_CERT, None, False)
-NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", IG_LIVE_CA_CERT, None, True)
-NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint("https://msg.intspineservices.nhs.uk", IG_INT_CA_CERT, None, True)
+NHS_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", INT_CA_CERT, None, True, True)
+NHS_DEV_ENDPOINT = Endpoint("https://msg.dev.spine2.ncrs.nhs.uk", DEV_CA_CERT, None, True, True)
+NHS_DEP_ENDPOINT = Endpoint("https://msg.dep.spine2.ncrs.nhs.uk", DEP_CA_CERT, None, True, True)
+NHS_TRAIN_ENDPOINT = Endpoint("https://msg.train.spine2.ncrs.nhs.uk", TRAIN_CA_CERT, None, True, True)
+NHS_LIVE_ENDPOINT = Endpoint("https://mesh-sync.national.ncrs.nhs.uk", LIVE_CA_CERT, None, True, True)
+NHS_OPENTEST_ENDPOINT = Endpoint("https://192.168.128.11", OPENTEST_CA_CERT, None, False, False)
+NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", IG_LIVE_CA_CERT, None, True, True)
+NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint("https://msg.intspineservices.nhs.uk", IG_INT_CA_CERT, None, True, False)
+
+ENDPOINTS = [
+    (name, endpoint) for name, endpoint in locals().items() if name.endswith("_ENDPOINT") and name.startswith("NHS_")
+]
+
+
+_HOSTNAME_ENDPOINT_MAP = {urlparse(ep.url).hostname: ep for name, ep in ENDPOINTS if "_OPENTEST_" not in name}
+
+
+def try_get_endpoint_from_url(url: str) -> Optional[Endpoint]:
+    url_parsed = urlparse(url)
+    if not url_parsed.hostname:
+        return None
+    defaults = _HOSTNAME_ENDPOINT_MAP.get(url_parsed.hostname.lower())
+    if not defaults:
+        return None
+
+    return Endpoint(url, *defaults[1:])
 
 
 def deprecated(reason=None):
@@ -130,28 +152,22 @@ class MeshError(Exception):
 class SSLContextAdapter(HTTPAdapter):
     def __init__(
         self,
-        url: Union[str, Endpoint],
         cert: Optional[Union[Tuple[str], Tuple[str, str], Tuple[str, str, str]]] = None,
         verify: Optional[Union[str, bool]] = None,
         check_hostname: Optional[bool] = None,
+        hostname_checks_common_name: Optional[bool] = None,
     ):
-        self.url = url
         self.cert = cert
         self.verify = verify
         self.check_hostname = check_hostname
-        if check_hostname is None and hasattr(url, "check_hostname"):
-            self.check_hostname = url.check_hostname
-
-        if cert is None and hasattr(url, "cert"):
-            self.cert = url.cert
-
-        if verify is None and hasattr(url, "verify"):
-            self.verify = url.verify
+        self.hostname_checks_common_name = hostname_checks_common_name
 
         super().__init__()
 
-    def init_poolmanager(self, *args, **kwargs):
-        context = ssl.create_default_context()
+    def create_ssl_context(self) -> ssl.SSLContext:
+        context = cast(ssl.SSLContext, create_urllib3_context())
+
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
 
         if self.cert and isinstance(self.cert, (tuple, list)):
             context.load_cert_chain(*self.cert)
@@ -160,19 +176,34 @@ class SSLContextAdapter(HTTPAdapter):
             if isinstance(self.verify, (str, bytes)):
                 context.load_verify_locations(self.verify)
 
-            if context.check_hostname is not None:
+            if self.check_hostname is not None:
                 context.check_hostname = cast(bool, self.check_hostname)
 
             context.verify_mode = ssl.CERT_REQUIRED
-            if self.check_hostname is not False:
-                context.hostname_checks_common_name = True
+            if context.check_hostname is not False:
+                if self.hostname_checks_common_name is not None:
+                    context.hostname_checks_common_name = self.hostname_checks_common_name
 
         if self.verify is False:
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
 
+        return context
+
+    def init_poolmanager(self, *args, **kwargs):
+        context = self.create_ssl_context()
         kwargs["ssl_context"] = context
+        if context.check_hostname is False:
+            kwargs["assert_hostname"] = False
         return super(SSLContextAdapter, self).init_poolmanager(*args, **kwargs)
+
+    def proxy_manager_for(self, proxy, **proxy_kwargs):
+        context = self.create_ssl_context()
+        proxy_kwargs["ssl_context"] = context
+        if context.check_hostname is False:
+            proxy_kwargs["assert_hostname"] = False
+
+        return super().proxy_manager_for(proxy, **proxy_kwargs)
 
 
 class MeshClient(object):
@@ -191,6 +222,7 @@ class MeshClient(object):
         cert: Optional[Union[Tuple[str], Tuple[str, str], Tuple[str, str, str]]] = None,
         verify: Optional[Union[str, bool]] = None,
         check_hostname: Optional[bool] = None,
+        hostname_checks_common_name: Optional[bool] = None,
         max_chunk_size=75 * 1024 * 1024,
         proxies: Optional[Dict[str, str]] = None,
         transparent_compress: bool = False,
@@ -229,9 +261,30 @@ class MeshClient(object):
         shared_key = shared_key or get_shared_key_from_environ()
 
         self._session = requests.Session()
-        adapter = SSLContextAdapter(url, cert, verify, check_hostname)
-        self._session.mount("https://", adapter)
-        self._session.mount("http://", adapter)
+
+        if isinstance(url, str):
+            endpoint_config = try_get_endpoint_from_url(url)
+            if endpoint_config:
+                url = endpoint_config
+
+        self._url = url.url if hasattr(url, "url") else url
+
+        if verify is None and hasattr(url, "verify"):
+            verify = url.verify
+
+        if check_hostname is None and hasattr(url, "check_hostname"):
+            check_hostname = url.check_hostname
+
+        if hostname_checks_common_name is None and hasattr(url, "hostname_checks_common_name"):
+            hostname_checks_common_name = url.hostname_checks_common_name
+
+        if cert is None and hasattr(url, "cert"):
+            cert = url.cert
+
+        if verify is False:
+            self._session.verify = False
+
+        self._session.mount(self._url, SSLContextAdapter(cert, verify, check_hostname, hostname_checks_common_name))
         self._session.headers = {
             "User-Agent": (
                 f"mesh_client;{__version__};N/A;{platform.processor() or platform.machine()};"
@@ -240,15 +293,6 @@ class MeshClient(object):
             "Accept-Encoding": "gzip",
         }
         self._session.auth = AuthTokenGenerator(shared_key, mailbox, password)
-        if hasattr(url, "url"):
-            self._url = url.url
-        else:
-            self._url = url
-
-        if verify is not None:
-            self._session.verify = verify
-        elif hasattr(url, "verify"):
-            self._session.verify = url.verify
 
         self._session.proxies = proxies or {}
         self._mailbox = mailbox

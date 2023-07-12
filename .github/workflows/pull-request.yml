@@ -143,28 +143,28 @@ jobs:
           distribution: "corretto"
           java-version: "17"
 
-#      - name: provision sonar-scanner
-#        if: github.actor != 'dependabot[bot]' && (success() || failure())
-#        run: |
-#          export SONAR_VERSION="4.7.0.2747"
-#          wget -q "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
-#          unzip -q ./sonar-scanner.zip
-#          mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
-#          scripts/sonar_tests.py
-#
-#      - name: run sonar scan
-#        if: github.actor != 'dependabot[bot]' && (success() || failure())
-#        run: |
-#          PATH="$PWD/sonar-scanner/bin:$PATH"
-#          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-#            git checkout "${GITHUB_HEAD_REF}"
-#            sonar-scanner -Dsonar.pullrequest.branch="{{ github.event.pull_request.head.sha }}" -Dsonar.pullrequest.base="{{ github.event.pull_request.base.sha }}" -Dsonar.pullrequest.key="${{ github.event.number }}"
-#          else
-#            sonar-scanner
-#          fi
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: provision sonar-scanner
+        if: github.actor != 'dependabot[bot]' && (success() || failure())
+        run: |
+          export SONAR_VERSION="4.7.0.2747"
+          wget -q "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
+          unzip -q ./sonar-scanner.zip
+          mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
+          scripts/sonar_tests.py
+
+      - name: run sonar scan
+        if: github.actor != 'dependabot[bot]' && (success() || failure())
+        run: |
+          PATH="$PWD/sonar-scanner/bin:$PATH"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git checkout "${GITHUB_HEAD_REF}"
+            sonar-scanner -Dsonar.pullrequest.branch="{{ github.event.pull_request.head.sha }}" -Dsonar.pullrequest.base="{{ github.event.pull_request.base.sha }}" -Dsonar.pullrequest.key="${{ github.event.number }}"
+          else
+            sonar-scanner
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 
       - name: archive reports

@@ -17,9 +17,9 @@ NHS Digital.
 """
 default_ssl_opts = MOCK_SSL_OPTS
 
-LOCAL_MOCK_ENDPOINT = Endpoint("https://localhost:8000", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False)
-LOCAL_FAKE_ENDPOINT = Endpoint("https://localhost:8829", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False)
-SANDBOX_ENDPOINT = Endpoint("https://localhost:8701", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False)
+LOCAL_MOCK_ENDPOINT = Endpoint("https://localhost:8000", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False, False)
+LOCAL_FAKE_ENDPOINT = Endpoint("https://localhost:8829", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False, False)
+SANDBOX_ENDPOINT = Endpoint("https://localhost:8701", MOCK_CA_CERT, (MOCK_CERT, MOCK_KEY), False, False)
 
 
 @contextlib.contextmanager

@@ -24,3 +24,13 @@ services:
       - ./tests/workflows.jsonl:/app/mesh_sandbox/store/data/workflows.jsonl:ro
       - ./tests/server.cert.pem:/tmp/server-cert.pem:ro
       - ./tests/server.key.pem:/tmp/server-cert.key:ro
+
+
+  squid:
+    build: docker/squid
+    ports:
+      - "8019:3129" # this port doesn't require proxy_protocol header ( but might use 3128 for fargate )
+    healthcheck:
+      test: timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/3129' || exit 1
+      interval: 3s
+      timeout: 10s

@@ -284,7 +284,9 @@ class MeshClient(object):
         if verify is False:
             self._session.verify = False
 
-        self._session.mount(self._url, SSLContextAdapter(cert, verify, check_hostname, hostname_checks_common_name))
+        if self._url.lower().startswith("https://"):
+            self._session.mount(self._url, SSLContextAdapter(cert, verify, check_hostname, hostname_checks_common_name))
+
         self._session.headers = {
             "User-Agent": (
                 f"mesh_client;{__version__};N/A;{platform.processor() or platform.machine()};"

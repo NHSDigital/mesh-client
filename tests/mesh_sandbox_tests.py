@@ -1,10 +1,12 @@
 import io
 import os.path
+import sys
 from typing import List, cast
 from uuid import uuid4
 
 import pytest
 import requests
+from pytest_httpserver import HTTPServer
 from requests import HTTPError
 
 from mesh_client import CombineStreams, MeshClient, MeshError
@@ -279,3 +281,11 @@ def test_endpoint_lookup(alice: MeshClient, bob: MeshClient):
 def test_error_handling(alice: MeshClient, bob: MeshClient):
     with pytest.raises(MeshError):
         alice.send_message(bob_mailbox, b"")
+
+
+@pytest.mark.skipif(sys.version_info < (3, 8), reason="requires python3.8 or higher")
+def test_mesh_client_with_http_server(httpserver: HTTPServer):
+    httpserver.expect_request("/messageexchange/_ping").respond_with_json({}, status=200)
+
+    with MeshClient(httpserver.url_for(""), bob_mailbox, bob_password, max_chunk_size=5, verify=False) as client:
+        client.ping()

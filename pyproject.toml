@@ -49,6 +49,7 @@ coverage = "^7.2.7"
 pytest = "^7.4.0"
 importlib-metadata = {version = ">=4.11.4", python = "<3.12"}
 #importlib-resources = {version = "*", python = "<3.9"}
+pytest-httpserver = {version = "^1.0.8", python = ">=3.8,<4.0"}
 
 [tool.poetry.group.local.dependencies]
 ipython = {version = "^8.14.0", python = ">=3.9,<4.0"}
@@ -117,6 +118,7 @@ deps =
     requests>=2.26.0
     mock
     pytest
+    pytest-httpserver
 commands =
     python -m pytest
 

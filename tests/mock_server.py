@@ -28,7 +28,7 @@ from collections import OrderedDict
 from contextlib import closing
 from hashlib import sha256
 from threading import Thread
-from typing import List, cast
+from typing import Any, Dict, List, Optional, cast
 from urllib.parse import parse_qs
 from wsgiref.simple_server import WSGIServer, make_server
 from wsgiref.util import shift_path_info
@@ -69,7 +69,7 @@ def stream_from_wsgi_environ(environ):
 
 def _dumb_response_code(code, message):
     def handle(environ, start_response):
-        start_response("{} {}".format(code, message), [("Content-Type", "text/plain")])
+        start_response(f"{code} {message}", [("Content-Type", "text/plain")])
         return [message.encode("UTF-8")]
 
     return handle
@@ -130,9 +130,9 @@ class MockMeshApplication:
     different message id formats.
     """
 
-    def __init__(self, shared_key=get_shared_key_from_environ()):
-        self.messages = {}
-        self._shared_key = shared_key
+    def __init__(self, shared_key: Optional[bytes] = None):
+        self.messages: Dict[str, Any] = {}
+        self._shared_key = shared_key or get_shared_key_from_environ()
         self._msg_count = 0
 
     @property
@@ -286,7 +286,7 @@ class MockMeshApplication:
             if environ["HTTP_ACCEPT_ENCODING"] != "gzip":
                 chunk = zlib.decompress(chunk)
 
-            chunk_header = "{}:{}".format(chunk_num, len(chunks) + 1)
+            chunk_header = f"{chunk_num}:{len(chunks) + 1}"
             start_response(
                 "200 OK",
                 [
@@ -356,8 +356,8 @@ class MockMeshApplication:
             ),
             "results": [
                 {
-                    "address": "{}HC001".format(org_code),
-                    "description": "{} {} endpoint".format(org_code, workflow_id),
+                    "address": f"{org_code}HC001",
+                    "description": f"{org_code} {workflow_id} endpoint",
                     "endpoint_type": "MESH",
                 }
             ],
@@ -389,7 +389,7 @@ class MockMeshApplication:
         """
         self.server = make_server("", 0, self, server_class=SSLWSGIServer)
         port = self.server.server_address[1]
-        self.uri = "https://localhost:{}".format(port)
+        self.uri = f"https://localhost:{port}"
         thread = Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01})
         thread.daemon = True
         thread.start()
@@ -404,10 +404,10 @@ class MockMeshApplication:
         self.server.shutdown()
 
 
-class MockMeshChunkRetryApplication(MockMeshApplication, object):
+class MockMeshChunkRetryApplication(MockMeshApplication):
     def __init__(self):
         self.allowed_retries = {}
-        super(MockMeshChunkRetryApplication, self).__init__()
+        super().__init__()
 
     def set_chunk_retry_options(self, options):
         self.retry_options = options
@@ -417,18 +417,17 @@ class MockMeshChunkRetryApplication(MockMeshApplication, object):
         if current_chunk == 1:
             self.allowed_retries = {p[0]: p[1] for p in self.retry_options}
 
-        if current_chunk in self.allowed_retries:
-            if self.allowed_retries[current_chunk] >= 0:
-                self.allowed_retries[current_chunk] -= 1
-                return _error("application/json", "", start_response)
+        if current_chunk in self.allowed_retries and self.allowed_retries[current_chunk] >= 0:
+            self.allowed_retries[current_chunk] -= 1
+            return _error("application/json", "", start_response)
 
-        return super(MockMeshChunkRetryApplication, self).outbox(environ, start_response)
+        return super().outbox(environ, start_response)
 
 
 class SlowMockMeshApplication(MockMeshApplication):
     def __call__(self, environ, start_response):
         time.sleep(2.0)
-        return super(SlowMockMeshApplication, self).__call__(environ, start_response)
+        return super().__call__(environ, start_response)
 
 
 _data_dir = os.path.dirname(__file__)
@@ -442,9 +441,9 @@ default_server_context.check_hostname = False
 default_server_context.verify_mode = ssl.CERT_REQUIRED
 
 
-class SSLWSGIServer(WSGIServer, object):
+class SSLWSGIServer(WSGIServer):
     __context = default_server_context
 
     def get_request(self):
-        (socket, addr) = super(SSLWSGIServer, self).get_request()
+        (socket, addr) = super().get_request()
         return self.__context.wrap_socket(socket, server_side=True), addr

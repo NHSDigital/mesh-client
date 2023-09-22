@@ -3,7 +3,7 @@ from collections import namedtuple
 from typing import Dict
 from uuid import uuid4
 
-import mock
+import mock  # noqa: UP026
 import pytest
 import requests
 
@@ -17,14 +17,14 @@ bob_mailbox = "bob"
 bob_password = "password"
 
 
-@pytest.fixture(scope="function", name="mock_app")
-def _mock_mesh_app():
+@pytest.fixture(name="mock_app")
+def mock_mesh_app():
     with MockMeshChunkRetryApplication() as mock_app:
         yield mock_app
 
 
-@pytest.fixture(scope="function", name="alice")
-def _alice_mesh_client(mock_app: MockMeshChunkRetryApplication):
+@pytest.fixture(name="alice")
+def alice_mesh_client(mock_app: MockMeshChunkRetryApplication):
     with MeshClient(
         mock_app.uri,
         alice_mailbox,
@@ -36,8 +36,8 @@ def _alice_mesh_client(mock_app: MockMeshChunkRetryApplication):
         yield alice
 
 
-@pytest.fixture(scope="function", name="bob")
-def _bob_mesh_client(mock_app: MockMeshChunkRetryApplication):
+@pytest.fixture(name="bob")
+def bob_mesh_client(mock_app: MockMeshChunkRetryApplication):
     with MeshClient(
         mock_app.uri,
         bob_mailbox,
@@ -53,7 +53,7 @@ def _count_chunk_retry_call_counts(mocked_post):
     counts: Dict[int, int] = {}
     for call in mocked_post.call_args_list:
         chunk = int(call.kwargs["headers"]["Mex-Chunk-Range"].split(":")[0])
-        if chunk not in counts.keys():
+        if chunk not in counts:
             counts[chunk] = 0
         else:
             counts[chunk] += 1
@@ -110,7 +110,8 @@ def test_chunk_retries_with_file(
     options = [chunk_options(2, 2)]
     mock_app.set_chunk_retry_options(options)
 
-    message_id = alice.send_message(bob_mailbox, open(chunk_file, "rb"))
+    with open(chunk_file, "rb") as f:
+        message_id = alice.send_message(bob_mailbox, f)
 
     received = bob.retrieve_message(message_id).read()
     assert received == b"test1 test2 test3"

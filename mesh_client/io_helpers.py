@@ -1,3 +1,4 @@
+import contextlib
 import io
 import os
 import warnings
@@ -5,7 +6,7 @@ import zlib
 from typing import List, cast
 
 
-class IteratorMixin(object):
+class IteratorMixin:
     """
     Produce a series of lines, from a readable that only exposes a `read` method
     """
@@ -22,8 +23,7 @@ class IteratorMixin(object):
             last_block = len(block) == 0
             buff.seek(0)
             lines = buff.readlines()
-            for line in lines[:-1]:
-                yield line
+            yield from lines[:-1]
             if not last_block:
                 buff.seek(0)
                 buff.write(lines[-1])
@@ -44,31 +44,31 @@ class IteratorMixin(object):
         return list(iter(self))
 
 
-class CloseUnderlyingMixin(object):
+class CloseUnderlyingMixin:
     def close(self):
         try:
             if hasattr(self._underlying, "close"):  # type: ignore[has-type]
                 self._underlying.close()  # type: ignore[has-type]
         finally:
             self._underlying = None
-            if hasattr(super(CloseUnderlyingMixin, self), "close"):
-                super(CloseUnderlyingMixin, self).close()  # type: ignore[misc]
+            if hasattr(super(), "close"):
+                super().close()  # type: ignore[misc]
 
     def __del__(self):
         self.close()
-        if hasattr(super(CloseUnderlyingMixin, self), "__del__"):
-            super(CloseUnderlyingMixin, self).__del__()  # type: ignore[misc]
+        if hasattr(super(), "__del__"):
+            super().__del__()  # type: ignore[misc]
 
     def __enter__(self):
-        if hasattr(super(CloseUnderlyingMixin, self), "__enter__"):
-            return super(CloseUnderlyingMixin, self).__enter__()  # type: ignore[misc]
+        if hasattr(super(), "__enter__"):
+            return super().__enter__()  # type: ignore[misc]
         else:
             return self
 
     def __exit__(self, typ, value, traceback):
         self.close()
-        if hasattr(super(CloseUnderlyingMixin, self), "__exit__"):
-            return super(CloseUnderlyingMixin, self).__exit__(typ, value, traceback)  # type: ignore[misc]
+        if hasattr(super(), "__exit__"):
+            return super().__exit__(typ, value, traceback)  # type: ignore[misc]
 
 
 class AbstractGzipStream(IteratorMixin, CloseUnderlyingMixin):
@@ -83,10 +83,10 @@ class AbstractGzipStream(IteratorMixin, CloseUnderlyingMixin):
         self._block_size = block_size
 
     def _process_block(self, block):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _finish(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def read(self, n=-1):
         if n == -1:
@@ -185,7 +185,8 @@ class SplitStream(CloseUnderlyingMixin):
         for i in range(len(self)):
             if self._remaining > 0:
                 warnings.warn(
-                    "moving to next chunk, despite unread content in buffer " "- existing chunk will become invalid"
+                    "moving to next chunk, despite unread content in buffer - existing chunk will become invalid",
+                    stacklevel=2,
                 )
                 assert self._underlying
                 self._underlying.read(self._remaining)
@@ -239,10 +240,8 @@ class CombineStreams(IteratorMixin):
         self._close_current_stream()
 
     def _close_current_stream(self):
-        try:
+        with contextlib.suppress(Exception):
             self._current_stream.close()
-        except:  # noqa: E722
-            pass
 
 
 class FiniteLengthStream(IteratorMixin, CloseUnderlyingMixin):

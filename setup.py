@@ -9,13 +9,13 @@ from os.path import dirname, join
 import toml  # type: ignore[import]
 from setuptools import setup  # type: ignore[import]
 
-with open(join(dirname(__file__), "pyproject.toml"), "r") as f:
+with open(join(dirname(__file__), "pyproject.toml")) as f:
     pyproject = toml.loads(f.read())
 
 poetry_cfg = pyproject["tool"]["poetry"]
 
 
-with open(join(dirname(__file__), poetry_cfg["readme"]), "r") as f:
+with open(join(dirname(__file__), poetry_cfg["readme"])) as f:
     long_description = f.read()
 
 

@@ -1,4 +1,5 @@
 import collections
+import contextlib
 import datetime
 import functools
 import hmac
@@ -46,11 +47,9 @@ else:
 def _get_version(*names: str) -> str:
     """ """
     for name in names:
-        try:
+        with contextlib.suppress(PackageNotFoundError):
             pkg_version = version(name)
             return pkg_version
-        except PackageNotFoundError:
-            continue
     return "unknown"
 
 
@@ -180,9 +179,8 @@ class SSLContextAdapter(HTTPAdapter):
                 context.check_hostname = cast(bool, self.check_hostname)
 
             context.verify_mode = ssl.CERT_REQUIRED
-            if context.check_hostname is not False:
-                if self.hostname_checks_common_name is not None:
-                    context.hostname_checks_common_name = self.hostname_checks_common_name
+            if context.check_hostname is not False and self.hostname_checks_common_name is not None:
+                context.hostname_checks_common_name = self.hostname_checks_common_name
 
         if self.verify is False:
             context.check_hostname = False
@@ -195,7 +193,7 @@ class SSLContextAdapter(HTTPAdapter):
         kwargs["ssl_context"] = context
         if context.check_hostname is False:
             kwargs["assert_hostname"] = False
-        return super(SSLContextAdapter, self).init_poolmanager(*args, **kwargs)
+        return super().init_poolmanager(*args, **kwargs)
 
     def proxy_manager_for(self, proxy, **proxy_kwargs):
         context = self.create_ssl_context()
@@ -206,7 +204,7 @@ class SSLContextAdapter(HTTPAdapter):
         return super().proxy_manager_for(proxy, **proxy_kwargs)
 
 
-class MeshClient(object):
+class MeshClient:
     """
     A class representing a single MESH session, for a given user on a given
     endpoint. This class handles details such as chunking and compression
@@ -425,7 +423,7 @@ class MeshClient(object):
         response.raise_for_status()
         return response
 
-    def send_message(
+    def send_message(  # noqa: C901
         self,
         recipient: str,
         data,
@@ -479,7 +477,7 @@ class MeshClient(object):
                     value = "Y" if value else "N"
                 headers[_OPTIONAL_HEADERS[key]] = str(value)
             else:
-                optional_args = ", ".join(["recipient", "data"] + list(_OPTIONAL_HEADERS.keys()))
+                optional_args = ", ".join(["recipient", "data", *list(_OPTIONAL_HEADERS.keys())])
                 raise TypeError(f"Unrecognised keyword argument '{key}'.  optional arguments are: {optional_args}")
 
         if transparent_compress:
@@ -592,7 +590,8 @@ class MeshClient(object):
                 " no longer needed. This can be achieved by using the close"
                 " method, or by using MeshClient in a with block. The"
                 " connection pool will be closed for you by the destructor"
-                " on this occasion, but you should not rely on this."
+                " on this occasion, but you should not rely on this.",
+                stacklevel=2,
             )
             self.close()
 
@@ -683,9 +682,10 @@ class _BaseMessage:
                 header_value = header_value.upper() in ["Y", "TRUE"]
             setattr(self, attribute, header_value)
         chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
-        maybe_decompress = (
-            lambda resp: GzipDecompressStream(resp.raw) if resp.headers.get("Content-Encoding") == "gzip" else resp.raw
-        )
+
+        def maybe_decompress(resp):
+            return GzipDecompressStream(resp.raw) if resp.headers.get("Content-Encoding") == "gzip" else resp.raw
+
         self._response = CombineStreams(
             chain(
                 [maybe_decompress(response)],
@@ -693,7 +693,7 @@ class _BaseMessage:
             )
         )
 
-    def id(self) -> str:
+    def id(self) -> str:  # noqa: A003
         """return the message id
 
         Returns:
@@ -771,7 +771,7 @@ class Message(_BaseMessage, _MessageAttrs):
         super().__init__(msg_id, response, client)
 
 
-class AuthTokenGenerator(object):
+class AuthTokenGenerator:
     def __init__(self, key: bytes, mailbox: str, password: str):
         self._key = key
         self._mailbox = mailbox

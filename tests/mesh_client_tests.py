@@ -41,22 +41,22 @@ class TestError(Exception):
     pass
 
 
-@pytest.fixture(scope="function", name="mock_app")
-def _mock_mesh_app():
+@pytest.fixture(name="mock_app")
+def mock_mesh_app():
     with MockMeshApplication() as mock_app:
         yield mock_app
 
 
-@pytest.fixture(scope="function", name="alice")
-def _alice_mesh_client(mock_app: MockMeshApplication):
+@pytest.fixture(name="alice")
+def alice_mesh_client(mock_app: MockMeshApplication):
     with MeshClient(
         mock_app.uri, alice_mailbox, alice_password, max_chunk_size=5, **default_ssl_opts  # type: ignore[arg-type]
     ) as alice:
         yield alice
 
 
-@pytest.fixture(scope="function", name="bob")
-def _bob_mesh_client(mock_app: MockMeshApplication):
+@pytest.fixture(name="bob")
+def bob_mesh_client(mock_app: MockMeshApplication):
     with MeshClient(
         mock_app.uri, bob_mailbox, bob_password, max_chunk_size=5, **default_ssl_opts  # type: ignore[arg-type]
     ) as bob:
@@ -93,7 +93,7 @@ def test_send_receive_combine_streams_part1_multiple_of_chunk_size(alice: MeshCl
     part2_length = 23
 
     stream = {
-        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO(b"W" * part2_length)]),
         "ContentLength": part1_length + part2_length,
     }
 
@@ -113,7 +113,7 @@ def test_send_receive_combine_chunked_small_chunk_size(alice: MeshClient, bob: M
     part2_length = 20
 
     stream = {
-        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO(b"W" * part2_length)]),
         "ContentLength": part1_length + part2_length,
     }
 
@@ -129,7 +129,7 @@ def test_send_receive_combine_chunked_override_chunk_size(alice: MeshClient, bob
     part2_length = 20
 
     stream = {
-        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO(b"W" * part2_length)]),
         "ContentLength": part1_length + part2_length,
     }
 
@@ -145,7 +145,7 @@ def test_send_receive_combine_streams_part1_not_multiple_of_chunk_size(alice: Me
     part2_length = 20
 
     stream = {
-        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO(b"W" * part2_length)]),
         "ContentLength": part1_length + part2_length,
     }
 
@@ -211,7 +211,7 @@ def test_context_manager_failure(alice: MeshClient, bob: MeshClient):
     try:
         with bob.retrieve_message(message_id) as msg:
             assert msg.read() == b"Hello Bob 4"
-            raise TestError()
+            raise TestError
     except TestError:
         pass
     assert bob.list_messages() == [message_id]
@@ -292,6 +292,7 @@ def test_error_handling(alice: MeshClient, bob: MeshClient):
 def test_timeout():
     with SlowMockMeshApplication() as mock_app:
         endpoint = LOCAL_MOCK_ENDPOINT._replace(url=mock_app.uri)
-        with pytest.raises(requests.exceptions.Timeout):
-            with MeshClient(endpoint, alice_mailbox, alice_password, max_chunk_size=5, timeout=0.5) as client:
-                client.list_messages()
+        with pytest.raises(requests.exceptions.Timeout), MeshClient(
+            endpoint, alice_mailbox, alice_password, max_chunk_size=5, timeout=0.5
+        ) as client:
+            client.list_messages()

@@ -240,11 +240,8 @@ jobs:
       - name: black
         run: make black-check
 
-      - name: isort
-        run: make isort-check
-
-      - name: flake8
-        run: make flake8
+      - name: ruff
+        run: make ruff-ci
 
       - name: mypy
         run: make mypy

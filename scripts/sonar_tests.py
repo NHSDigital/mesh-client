@@ -89,7 +89,7 @@ def _transform_coverage(reports_dir: str, output_sonar: str):
         return
 
     print("transform:", src_coverage, out_coverage)
-    with open(src_coverage, "r", encoding="utf-8") as src:
+    with open(src_coverage, encoding="utf-8") as src:
         coverage = src.read()
         coverage = re.sub(r"<source>.*?</source>", "<source>.</source>", coverage)
         with open(out_coverage, "w+", encoding="utf-8") as out:

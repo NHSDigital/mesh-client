@@ -14,9 +14,9 @@ echo ""
 echo "check formatting ..."
 echo ""
 
-if ! make isort-check; then
+if ! make ruff-check; then
   echo ""
-  echo "isort-check failed"
+  echo "ruff-check failed"
   echo ""
   exit 1
 fi

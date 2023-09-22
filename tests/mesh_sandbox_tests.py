@@ -29,20 +29,20 @@ def _default_vars():
         yield
 
 
-@pytest.fixture(scope="function", autouse=True)
+@pytest.fixture(autouse=True)
 def _resets():
     res = requests.delete(sandbox_uri("admin/reset"), verify=SANDBOX_ENDPOINT.verify)
     res.raise_for_status()
 
 
-@pytest.fixture(scope="function", name="alice")
-def _alice_client():
+@pytest.fixture(name="alice")
+def alice_client():
     with MeshClient(SANDBOX_ENDPOINT, alice_mailbox, alice_password, max_chunk_size=5) as client:
         yield client
 
 
-@pytest.fixture(scope="function", name="bob")
-def _bob_client():
+@pytest.fixture(name="bob")
+def bob_client():
     with MeshClient(SANDBOX_ENDPOINT, bob_mailbox, bob_password, max_chunk_size=5) as client:
         yield client
 
@@ -85,7 +85,7 @@ def test_send_receive_combine_streams_part1_multiple_of_chunk_size(alice: MeshCl
     part2_length = 23
 
     stream = {
-        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO(b"W" * part2_length)]),
         "ContentLength": part1_length + part2_length,
     }
 
@@ -105,7 +105,7 @@ def test_send_receive_combine_chunked_small_chunk_size(alice: MeshClient, bob: M
     part2_length = 20
 
     stream = {
-        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO(b"W" * part2_length)]),
         "ContentLength": part1_length + part2_length,
     }
 
@@ -121,7 +121,7 @@ def test_send_receive_combine_chunked_override_chunk_size(alice: MeshClient, bob
     part2_length = 20
 
     stream = {
-        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO(b"W" * part2_length)]),
         "ContentLength": part1_length + part2_length,
     }
 
@@ -137,7 +137,7 @@ def test_send_receive_combine_streams_part1_not_multiple_of_chunk_size(alice: Me
     part2_length = 20
 
     stream = {
-        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO((b"W" * part2_length))]),
+        "Body": CombineStreams([io.BytesIO(b"H" * part1_length), io.BytesIO(b"W" * part2_length)]),
         "ContentLength": part1_length + part2_length,
     }
 
@@ -203,7 +203,7 @@ def test_context_manager_failure(alice: MeshClient, bob: MeshClient):
     try:
         with bob.retrieve_message(message_id) as msg:
             assert msg.read() == b"Hello Bob 4"
-            raise TestError()
+            raise TestError
     except TestError:
         pass
     assert bob.list_messages() == [message_id]

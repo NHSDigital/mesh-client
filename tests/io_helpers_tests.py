@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 import gzip
 import io
 import tempfile
@@ -224,7 +222,7 @@ def test_split_bytes_irregular_size_2():
 
 def test_split_combine_stream_misaligned_with_chunk_size_1():
     instance = SplitStream(
-        dict(Body=CombineStreams([io.BytesIO(b"1234"), io.BytesIO(b"567890123456789")]), ContentLength=19), 5
+        {"Body": CombineStreams([io.BytesIO(b"1234"), io.BytesIO(b"567890123456789")]), "ContentLength": 19}, 5
     )
     assert len(instance) == 4
     iterator = iter(instance)
@@ -240,7 +238,7 @@ def test_split_combine_stream_misaligned_with_chunk_size_1():
 
 def test_split_combine_stream_misaligned_with_chunk_size_2():
     instance = SplitStream(
-        dict(Body=CombineStreams([io.BytesIO(b"123456789"), io.BytesIO(b"012345678")]), ContentLength=18), 5
+        {"Body": CombineStreams([io.BytesIO(b"123456789"), io.BytesIO(b"012345678")]), "ContentLength": 18}, 5
     )
     assert len(instance) == 4
     iterator = iter(instance)
@@ -256,10 +254,10 @@ def test_split_combine_stream_misaligned_with_chunk_size_2():
 
 def test_split_combine_stream_misaligned_with_chunk_size_3():
     instance = SplitStream(
-        dict(
-            Body=CombineStreams([io.BytesIO(b"123"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
-            ContentLength=12,
-        ),
+        {
+            "Body": CombineStreams([io.BytesIO(b"123"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
+            "ContentLength": 12,
+        },
         5,
     )
     assert len(instance) == 3

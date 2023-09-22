@@ -63,11 +63,16 @@ shellcheck:
 	@# Only swallow checking errors (rc=1), not fatal problems (rc=2)
 	docker run --rm -i -v ${PWD}:/mnt:ro koalaman/shellcheck -f gcc -e SC1090,SC1091 `find . \( -path "*/.venv/*" -prune -o -path "*/build/*" -prune -o -path "*/.tox/*" -prune -o -path "*/java_client/*" -prune  \) -o -type f -name '*.sh' -print` || test $$? -eq 1
 
+ruff: black
+	poetry run ruff --fix --show-fixes .
 
-flake8:
-	poetry run flake8
+ruff-check:
+	poetry run ruff .
 
-lint: flake8 mypy shellcheck
+ruff-ci:
+	poetry run ruff --format=github .
+
+lint: ruff mypy shellcheck
 
 clean:
 	rm -rf ./dist || true
@@ -84,11 +89,7 @@ purge: clean
 black-check:
 	poetry run black . --check
 
-isort-check:
-	poetry run isort . -c
-
 black:
-	poetry run isort .
 	poetry run black .
 
 

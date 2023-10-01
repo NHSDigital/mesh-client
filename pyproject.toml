@@ -46,7 +46,7 @@ pytest = "^7.4.0"
 importlib-metadata = {version = ">=4.11.4", python = "<3.12"}
 #importlib-resources = {version = "*", python = "<3.9"}
 pytest-httpserver = {version = "^1.0.8", python = ">=3.8,<4.0"}
-ruff = "^0.0.290"
+ruff = ">=0.0.290,<0.0.292"
 
 [tool.poetry.group.local.dependencies]
 ipython = {version = "^8.14.0", python = ">=3.9,<4.0"}

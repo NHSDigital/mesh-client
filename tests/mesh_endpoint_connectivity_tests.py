@@ -7,7 +7,7 @@ from _socket import gaierror
 from requests.exceptions import HTTPError, SSLError
 
 import mesh_client
-from mesh_client import NHS_INT_ENDPOINT, Endpoint, MeshClient
+from mesh_client import DEPRECATED_HSCN_INT_ENDPOINT, Endpoint, MeshClient
 from tests.helpers import MOCK_CERT, MOCK_KEY, temp_env_vars
 
 
@@ -22,19 +22,15 @@ def _host_resolves(endpoint: Endpoint):
     return True
 
 
-_ENDPOINTS = [
-    (name, endpoint)
-    for name, endpoint in mesh_client.ENDPOINTS
-    if not name.startswith("LOCAL_") and "_OPENTEST_" not in name
-]
+_ENDPOINTS = [(name, endpoint) for name, endpoint in mesh_client.ENDPOINTS if not name.startswith("LOCAL_")]
 
-_INTERNET_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if "_INTERNET_GATEWAY" in name]
+_INTERNET_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if not name.startswith("DEPRECATED_HSCN_")]
 
-_HSCN_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if "_INTERNET_GATEWAY" not in name]
+_HSCN_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if name.startswith("DEPRECATED_HSCN_")]
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
-@pytest.mark.skipif(not _host_resolves(NHS_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
+@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints(name: str, endpoint: Endpoint):
     with pytest.raises(HTTPError) as err, MeshClient(
         endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
@@ -45,7 +41,7 @@ def test_hscn_endpoints(name: str, endpoint: Endpoint):
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
-@pytest.mark.skipif(not _host_resolves(NHS_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
+@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_verify_false(name: str, endpoint: Endpoint):
     with pytest.raises(HTTPError) as err, MeshClient(
         endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False
@@ -56,7 +52,7 @@ def test_hscn_endpoints_verify_false(name: str, endpoint: Endpoint):
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
-@pytest.mark.skipif(not _host_resolves(NHS_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
+@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
     with pytest.raises(HTTPError) as err, MeshClient(
         endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
@@ -67,7 +63,7 @@ def test_hscn_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
-@pytest.mark.skipif(not _host_resolves(NHS_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
+@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_common_name_check_false(name: str, endpoint: Endpoint):
     with pytest.raises(SSLError) as err, MeshClient(
         endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
@@ -144,7 +140,7 @@ def test_internet_endpoints_with_port_defaults_from_hostname(name: str, endpoint
     ("name", "endpoint", "check_hostname"),
     [(ep[0], ep[1], check_hostname) for check_hostname, ep in itertools.product([True, False, None], _HSCN_ENDPOINTS)],
 )
-@pytest.mark.skipif(not _host_resolves(NHS_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
+@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_check_hostname(name: str, endpoint: Endpoint, check_hostname: bool):
     with pytest.raises(HTTPError) as err, MeshClient(
         endpoint.url,
@@ -180,7 +176,7 @@ def test_internet_endpoints_check_hostname(name: str, endpoint: Endpoint, check_
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
-@pytest.mark.skipif(not _host_resolves(NHS_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
+@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
     with pytest.raises(HTTPError) as err, MeshClient(
         endpoint,
@@ -195,7 +191,7 @@ def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
-@pytest.mark.skipif(not _host_resolves(NHS_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
+@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_via_an_ambient_proxy(name: str, endpoint: Endpoint):
     with temp_env_vars(HTTPS_PROXY="http://localhost:8019"), pytest.raises(HTTPError) as err, MeshClient(
         endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)

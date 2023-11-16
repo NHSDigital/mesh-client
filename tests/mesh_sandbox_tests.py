@@ -1,22 +1,23 @@
 import io
 import os.path
-import sys
 from typing import List, cast
 from uuid import uuid4
 
 import pytest
 import requests
-from pytest_httpserver import HTTPServer
 from requests import HTTPError
 
 from mesh_client import CombineStreams, MeshClient, MeshError
 from tests.helpers import SANDBOX_ENDPOINT, temp_env_vars
-from tests.mesh_client_tests import TestError
 
 alice_mailbox = "ALICE"
 alice_password = "password"
 bob_mailbox = "BOB"
 bob_password = "password"
+
+
+class TestError(Exception):
+    pass
 
 
 def sandbox_uri(path: str) -> str:
@@ -65,6 +66,21 @@ def test_bob_ping(bob: MeshClient):
 def test_handshake(alice: MeshClient, bob: MeshClient):
     hand_shook = alice.handshake()
     assert hand_shook == b"hello"
+
+
+def test_list_messages_with_a_max_results(alice: MeshClient, bob: MeshClient):
+    message_ids = []
+    total = 30
+    page_size = 10
+    for _ in range(total):
+        message_id = alice.send_message(bob_mailbox, b"Hello Bob 1", workflow_id=uuid4().hex)
+        message_ids.append(message_id)
+    assert bob.list_messages(max_results=page_size) == message_ids[:page_size]
+
+
+def test_list_messages_with_a_max_results_low(bob: MeshClient):
+    with pytest.raises(ValueError, match=">= 10"):
+        bob.list_messages(max_results=2)
 
 
 def test_send_receive(alice: MeshClient, bob: MeshClient):
@@ -229,7 +245,6 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
         assert msg.message_type == "DATA"
         assert msg.workflow_id == "111"
         assert msg.encrypted is False
-        assert msg.compressed is False
 
     message_id = alice.send_message(
         bob_mailbox, b"Hello Bob 5", encrypted=True, compressed=True, workflow_id=uuid4().hex
@@ -240,52 +255,28 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
         assert msg.compressed is True
 
 
-def test_tracking(alice: MeshClient, bob: MeshClient):
-    tracking_id = "Message1"
-    msg_id = alice.send_message(bob_mailbox, b"Hello World", local_id=tracking_id, workflow_id=uuid4().hex)
-    assert alice.get_tracking_info(tracking_id)["status"] == "Accepted"
-    bob.acknowledge_message(msg_id)
-    assert alice.get_tracking_info(tracking_id)["status"] == "Acknowledged"
-
-
 def test_msg_id_tracking_message_not_found(alice: MeshClient, bob: MeshClient):
     with pytest.raises(HTTPError) as err:
-        assert alice.get_tracking_info(message_id=uuid4().hex)
-
+        assert alice.track_message(message_id=uuid4().hex)
+    assert err.value.response is not None
     assert err.value.response.status_code == 404
 
 
 def test_msg_id_tracking(alice: MeshClient, bob: MeshClient):
     msg_id = alice.send_message(bob_mailbox, b"Hello World", workflow_id=uuid4().hex)
-    assert alice.get_tracking_info(message_id=msg_id)["status"] == "Accepted"
+    assert alice.track_message(message_id=msg_id)["status"] == "accepted"
     bob.acknowledge_message(msg_id)
-    assert alice.get_tracking_info(message_id=msg_id)["status"] == "Acknowledged"
-
-
-def test_by_message_id_tracking(alice: MeshClient, bob: MeshClient):
-    msg_id = alice.send_message(bob_mailbox, b"Hello World", workflow_id=uuid4().hex)
-    assert alice.track_by_message_id(message_id=msg_id)["status"] == "Accepted"
-    bob.acknowledge_message(msg_id)
-    assert alice.track_by_message_id(message_id=msg_id)["status"] == "Acknowledged"
+    assert alice.track_message(message_id=msg_id)["status"] == "acknowledged"
 
 
 def test_endpoint_lookup(alice: MeshClient, bob: MeshClient):
     result = alice.lookup_endpoint("X26", "RESTRICTED_WORKFLOW")
     result_list = cast(List[dict], result["results"])
     assert len(result_list) == 1
-    assert result_list[0]["address"] == "BOB"
-    assert result_list[0]["description"] == "TESTMB2"
-    assert result_list[0]["endpoint_type"] == "MESH"
+    assert result_list[0]["mailbox_id"] == "BOB"
+    assert result_list[0]["mailbox_name"] == "TESTMB2"
 
 
 def test_error_handling(alice: MeshClient, bob: MeshClient):
     with pytest.raises(MeshError):
         alice.send_message(bob_mailbox, b"")
-
-
-@pytest.mark.skipif(sys.version_info < (3, 8), reason="requires python3.8 or higher")
-def test_mesh_client_with_http_server(httpserver: HTTPServer):
-    httpserver.expect_request("/messageexchange/_ping").respond_with_json({}, status=200)
-
-    with MeshClient(httpserver.url_for(""), bob_mailbox, bob_password, max_chunk_size=5, verify=False) as client:
-        client.ping()

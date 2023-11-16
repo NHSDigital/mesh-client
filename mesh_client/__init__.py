@@ -5,22 +5,31 @@ import functools
 import hmac
 import os.path
 import platform
+import socket  # noqa: F401
 import ssl
 import sys
-import time
 import uuid
 import warnings
 from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
 from itertools import chain
-from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, cast
+from types import TracebackType
+from typing import Any, Dict, Generator, List, Optional, Tuple, TypeVar, Union, cast
 from urllib.parse import quote as q
 from urllib.parse import urlparse
 
 import requests
+from requests import Response
 from requests.adapters import HTTPAdapter
-from urllib3.util.ssl_ import create_urllib3_context
+from urllib3 import BaseHTTPResponse
+from urllib3.connectionpool import ConnectionPool
+from urllib3.exceptions import (
+    ResponseError,
+)
+from urllib3.util import create_urllib3_context
+from urllib3.util.retry import Retry
+from urllib3.util.util import reraise
 
 from .io_helpers import (
     CombineStreams,
@@ -30,12 +39,16 @@ from .io_helpers import (
 )
 from .key_helper import get_shared_key_from_environ
 from .types import (
-    EndpointLookupResponse_v1,
-    ListMessageResponse_v1,
+    EndpointLookupResponse_v2,
+    ListMessageResponse_v2,
     SendMessageErrorResponse_v1,
-    SendMessageResponse_v1,
-    TrackingResponse_v1,
+    SendMessageErrorResponse_v2,
+    SendMessageResponse_v2,
+    TrackingResponse_v2,
 )
+
+if sys.version_info[:2] < (3, 8):
+    warnings.warn("python 3.7 is now end of life", category=DeprecationWarning, stacklevel=2)
 
 if sys.version_info[:2] >= (3, 8):
     # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
@@ -58,14 +71,8 @@ __version__ = _get_version("mesh-client")
 _PACKAGE_DIR = os.path.dirname(__file__)
 
 INT_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-int-ca-bundle.pem")
-DEV_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-dev-ca-bundle.pem")
 DEP_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-dep-ca-bundle.pem")
-TRAIN_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-train-ca-bundle.pem")
-LIVE_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-live-root-ca.pem")
-OPENTEST_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-opt-ca-bundle.pem")
-DIGICERT_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-digicert-ca-bundle.pem")
-IG_INT_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-ig-int-ca-bundle.pem")
-IG_LIVE_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-ig-live-ca-bundle.pem")
+LIVE_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-live-ca-bundle.pem")
 
 
 _OPTIONAL_HEADERS = {
@@ -96,21 +103,17 @@ Endpoint = collections.namedtuple(
     "Endpoint", ["url", "verify", "cert", "check_hostname", "hostname_checks_common_name"]
 )
 
-NHS_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", INT_CA_CERT, None, True, True)
-NHS_DEV_ENDPOINT = Endpoint("https://msg.dev.spine2.ncrs.nhs.uk", DEV_CA_CERT, None, True, True)
-NHS_DEP_ENDPOINT = Endpoint("https://msg.dep.spine2.ncrs.nhs.uk", DEP_CA_CERT, None, True, True)
-NHS_TRAIN_ENDPOINT = Endpoint("https://msg.train.spine2.ncrs.nhs.uk", TRAIN_CA_CERT, None, True, True)
-NHS_LIVE_ENDPOINT = Endpoint("https://mesh-sync.national.ncrs.nhs.uk", LIVE_CA_CERT, None, True, True)
-NHS_OPENTEST_ENDPOINT = Endpoint("https://192.168.128.11", OPENTEST_CA_CERT, None, False, False)
-NHS_INTERNET_GATEWAY_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", IG_LIVE_CA_CERT, None, True, True)
-NHS_INTERNET_GATEWAY_INT_ENDPOINT = Endpoint("https://msg.intspineservices.nhs.uk", IG_INT_CA_CERT, None, True, False)
+DEPRECATED_HSCN_DEP_ENDPOINT = Endpoint("https://msg.dep.spine2.ncrs.nhs.uk", DEP_CA_CERT, None, True, True)
+DEPRECATED_HSCN_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", INT_CA_CERT, None, True, True)
+DEPRECATED_HSCN_LIVE_ENDPOINT = Endpoint("https://mesh-sync.national.ncrs.nhs.uk", LIVE_CA_CERT, None, True, True)
+DEP_ENDPOINT = Endpoint("https://msg.depspineservices.nhs.uk", DEP_CA_CERT, None, True, False)
+INT_ENDPOINT = Endpoint("https://msg.intspineservices.nhs.uk", INT_CA_CERT, None, True, False)
+LIVE_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", LIVE_CA_CERT, None, True, True)
 
-ENDPOINTS = [
-    (name, endpoint) for name, endpoint in locals().items() if name.endswith("_ENDPOINT") and name.startswith("NHS_")
-]
+ENDPOINTS = [(name, endpoint) for name, endpoint in locals().items() if name.endswith("_ENDPOINT")]
 
 
-_HOSTNAME_ENDPOINT_MAP = {urlparse(ep.url).hostname: ep for name, ep in ENDPOINTS if "_OPENTEST_" not in name}
+_HOSTNAME_ENDPOINT_MAP = {urlparse(ep.url).hostname: ep for name, ep in ENDPOINTS}
 
 
 def try_get_endpoint_from_url(url: str) -> Optional[Endpoint]:
@@ -148,6 +151,65 @@ class MeshError(Exception):
     pass
 
 
+def _looks_like_send_error(status_code: int, response_dict: dict) -> bool:
+    if status_code == 417:
+        return True
+    if "errorDescription" in response_dict:
+        return True
+
+    if "detail" in response_dict:
+        return True
+
+    return False
+
+
+def _get_send_error_message(
+    response_dict: dict,
+) -> Tuple[str, Union[SendMessageErrorResponse_v1, SendMessageErrorResponse_v2, dict]]:
+    if "errorDescription" in response_dict:
+        return response_dict["errorDescription"], cast(SendMessageErrorResponse_v1, response_dict)
+
+    if "detail" in response_dict:
+        msg = (response_dict.get("detail") or [{"msg": response_dict.get("internal_id", "unknown")}])[0].get("msg")
+        return msg, cast(SendMessageErrorResponse_v2, response_dict)
+
+    return "unknown", response_dict
+
+
+class MeshRetry(Retry):
+    """
+    requests doesn't support disabling retry on an individual request, and to avoid creating duplicate messages
+    we will not retry post requests to the base outbox url .... but other chunk posts are retryable
+    """
+
+    def increment(
+        self,
+        method: Optional[str] = None,
+        url: Optional[str] = None,
+        response: Optional[BaseHTTPResponse] = None,
+        error: Optional[Exception] = None,
+        _pool: Optional[ConnectionPool] = None,
+        _stacktrace: Optional[TracebackType] = None,
+    ) -> Retry:
+        if method != "POST" or not url or not url.endswith("/outbox"):
+            return super().increment(method, url, response, error, _pool, _stacktrace)
+
+        if error:
+            raise reraise(type(error), error, _stacktrace)
+
+        if response and response.get_redirect_location():
+            cause = "too many redirects"
+        else:
+            cause = ResponseError.GENERIC_ERROR
+            if response and response.status:
+                cause = ResponseError.SPECIFIC_ERROR.format(status_code=response.status)
+
+        if _stacktrace:
+            raise ResponseError(cause).with_traceback(_stacktrace)
+
+        raise ResponseError(cause)
+
+
 class SSLContextAdapter(HTTPAdapter):
     def __init__(
         self,
@@ -155,13 +217,14 @@ class SSLContextAdapter(HTTPAdapter):
         verify: Optional[Union[str, bool]] = None,
         check_hostname: Optional[bool] = None,
         hostname_checks_common_name: Optional[bool] = None,
+        max_retries: Union[int, Retry] = 0,
     ):
         self.cert = cert
         self.verify = verify
         self.check_hostname = check_hostname
         self.hostname_checks_common_name = hostname_checks_common_name
 
-        super().__init__()
+        super().__init__(max_retries=max_retries)
 
     def create_ssl_context(self) -> ssl.SSLContext:
         context = cast(ssl.SSLContext, create_urllib3_context())
@@ -211,7 +274,7 @@ class MeshClient:
     transparently.
     """
 
-    def __init__(
+    def __init__(  # noqa: C901
         self,
         url: Union[str, Endpoint],
         mailbox: str,
@@ -224,7 +287,10 @@ class MeshClient:
         max_chunk_size=75 * 1024 * 1024,
         proxies: Optional[Dict[str, str]] = None,
         transparent_compress: bool = False,
-        max_chunk_retries: int = 0,
+        max_retries: Union[int, Retry] = 3,
+        retry_backoff_factor: Union[int, float] = 0.5,
+        retry_status_force_list: Tuple[int, ...] = (425, 429, 502, 503, 504),
+        retry_methods: Tuple[str, ...] = ("HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"),
         timeout: Union[int, float] = 10 * 60,
     ):
         """
@@ -232,13 +298,11 @@ class MeshClient:
 
         At a minimum, you must provide an endpoint url, a mailbox and a
         password. The endpoint URL can either be a string, or a preconfigured
-        endpoint. Currently the following endpoints are preconfigured:
+        endpoint. Currently, the following endpoints are preconfigured:
 
-        NHS_INT_ENDPOINT
-        NHS_LIVE_ENDPOINT
-        NHS_OPENTEST_ENDPOINT
-        NHS_INTERNET_GATEWAY_INT_ENDPOINT
-        NHS_INTERNET_GATEWAY_ENDPOINT
+        INT_ENDPOINT
+        LIVE_ENDPOINT
+        DEP_ENDPOINT
 
         Since MESH uses mutual authentication, it is also highly
         advisable to provide SSL information, in the form of cert and verify.
@@ -265,7 +329,7 @@ class MeshClient:
             if endpoint_config:
                 url = endpoint_config
 
-        self._url = url.url if hasattr(url, "url") else url
+        self._url = (url.url if hasattr(url, "url") else url).rstrip("/")
 
         if verify is None and hasattr(url, "verify"):
             verify = url.verify
@@ -282,10 +346,36 @@ class MeshClient:
         if verify is False:
             self._session.verify = False
 
-        if self._url.lower().startswith("https://"):
-            self._session.mount(self._url, SSLContextAdapter(cert, verify, check_hostname, hostname_checks_common_name))
+        url_lower = self._url.lower()
+
+        self._retries: Union[int, Retry] = 0
+        if isinstance(max_retries, Retry):
+            self._retries = max_retries
+        elif max_retries:
+            self._retries = MeshRetry(
+                total=max_retries,
+                backoff_factor=retry_backoff_factor,
+                status_forcelist=retry_status_force_list,
+                allowed_methods=retry_methods,
+            )
+
+        if url_lower.startswith("https://"):
+            self._session.mount(
+                self._url,
+                SSLContextAdapter(cert, verify, check_hostname, hostname_checks_common_name, max_retries=self._retries),
+            )
+        else:
+            self._session.mount(self._url, HTTPAdapter(max_retries=self._retries))
+
+        if ".ncrs.nhs.uk" in url_lower:
+            warnings.warn(
+                "HSCN endpoints are being deprecated; please move to the internet endpoint.",
+                category=DeprecationWarning,
+                stacklevel=2,
+            )
 
         self._session.headers = {
+            "Accept": "application/vnd.mesh.v2+json",
             "User-Agent": (
                 f"mesh_client;{__version__};N/A;{platform.processor() or platform.machine()};"
                 f"{platform.system()};{platform.release()} {platform.version()}"
@@ -298,13 +388,16 @@ class MeshClient:
         self._mailbox = mailbox
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
-        self._max_chunk_retries = max_chunk_retries
         self._timeout = timeout
         self._close_called = False
 
     @property
+    def mailbox_path(self) -> str:
+        return f"/messageexchange/{q(self._mailbox)}"
+
+    @property
     def mailbox_url(self) -> str:
-        return f"{self._url}/messageexchange/{q(self._mailbox)}"
+        return f"{self._url}{self.mailbox_path}"
 
     def ping(self) -> dict:
         """
@@ -318,7 +411,8 @@ class MeshClient:
 
     def handshake(self):
         """
-        List all messages in user's inbox. Returns a list of message_ids
+        connect and test authentication
+        https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#post-/messageexchange/-mailbox_id-
         """
         headers = {
             "mex-ClientVersion": f"mesh_client=={__version__}",
@@ -337,84 +431,94 @@ class MeshClient:
     def count_messages(self) -> int:
         """
         Count all messages in user's inbox. Returns an integer
+        https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/count
         """
         response = self._session.get(f"{self.mailbox_url}/count", timeout=self._timeout)
         response.raise_for_status()
         return cast(int, response.json()["count"])
 
-    def track_by_message_id(self, message_id: str) -> TrackingResponse_v1:
+    def track_message(self, message_id: str) -> TrackingResponse_v2:
         """
         Gets tracking information from MESH about a message, by its  message id.
         Returns a dictionary, in much the same format that MESH provides it.
+        https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/outbox/tracking
         """
         url = f"{self.mailbox_url}/outbox/tracking?messageID={q(message_id)}"
 
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
-        return cast(TrackingResponse_v1, response.json())
+        return cast(TrackingResponse_v2, response.json())
 
-    def _get_tracking_url(self, local_id: Optional[str] = None, message_id: Optional[str] = None) -> str:
-        if message_id:
-            return f"{self.mailbox_url}/outbox/tracking?messageID={q(message_id)}"
-
-        if local_id:
-            return f"{self.mailbox_url}/outbox/tracking/{q(local_id)}"
-
-        raise ValueError(
-            "Exactly one of local message id (called tracking_id, for historical reasons) "
-            "and message_id must be provided"
-        )
-
-    @deprecated(reason="tracking by local_id is deprecated, please use 'track_by_message_id'")
-    def get_tracking_info(
-        self, local_id: Optional[str] = None, message_id: Optional[str] = None
-    ) -> TrackingResponse_v1:
-        """
-        Gets tracking information from MESH about a message, by its local message id.
-        Returns a dictionary, in much the same format that MESH provides it.
-        """
-
-        url = self._get_tracking_url(local_id, message_id)
-
-        response = self._session.get(url, timeout=self._timeout)
-        response.raise_for_status()
-        return cast(TrackingResponse_v1, response.json())
-
-    def lookup_endpoint(self, ods_code: str, workflow_id: str) -> EndpointLookupResponse_v1:
+    def lookup_endpoint(self, ods_code: str, workflow_id: str) -> EndpointLookupResponse_v2:
         """
         Lookup a mailbox by organisation code and workflow id.
         Returns a dictionary, in much the same format that MESH provides it.
+        https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/endpointlookup/-ods_code-/-workflow_id-
         """
         response = self._session.get(
             f"{self._url}/messageexchange/endpointlookup/{q(ods_code)}/{q(workflow_id)}",
             timeout=self._timeout,
         )
         response.raise_for_status()
-        return cast(EndpointLookupResponse_v1, response.json())
+        return cast(EndpointLookupResponse_v2, response.json())
 
-    def list_messages(self) -> List[str]:
-        """
-        List all messages in user's inbox. Returns a list of message_ids
-        """
-        response = self._session.get(f"{self.mailbox_url}/inbox", timeout=self._timeout)
+    def _inbox_v2_page(
+        self, url: Optional[str] = None, params: Optional[Dict[str, Any]] = None
+    ) -> ListMessageResponse_v2:
+        url = url or f"{self.mailbox_url}/inbox"
+        response = self._session.get(url, timeout=self._timeout, params=params)
         response.raise_for_status()
-        return cast(ListMessageResponse_v1, response.json())["messages"]
 
-    def retrieve_message(self, message_id: str):
+        return cast(ListMessageResponse_v2, response.json())
+
+    def list_messages(self, max_results: Optional[int] = None, workflow_filter: Optional[str] = None) -> List[str]:
         """
-        Retrieve a message based on its message_id. This will return a Message
-        object
+            lists messages ids in the inbox; note if workflow_filter is set  it's possible to receive an empty page
+            when more results exist outside the first max_results
+            https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/inbox
+
+        Args:
+            max_results (Optional[int]): optional max results to limit the page size
+            workflow_filter (Optional[str]): workflow filter string
+
+        Returns:
+            List[str]: message ids
+        """
+
+        params: Dict[str, Union[str, int]] = {}
+        if max_results:
+            if max_results < 10:
+                raise ValueError("if set max_results should be >= 10")
+            params["max_results"] = max_results
+
+        if workflow_filter:
+            params["workflow_filter"] = workflow_filter
+
+        result = self._inbox_v2_page(f"{self.mailbox_url}/inbox", params=params)
+
+        return cast(List[str], result.get("messages", []))
+
+    def retrieve_message(self, message_id: str) -> "Message":
+        """
+        Retrieve a message based on its message_id. This will return a Message object
+        https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/inbox/-message_id-
         """
         message_id = getattr(message_id, "_msg_id", message_id)
-        response = self._session.get(
-            f"{self.mailbox_url}/inbox/{q(message_id)}",
-            stream=True,
-            timeout=self._timeout,
-        )
+        response = self._session.get(f"{self.mailbox_url}/inbox/{q(message_id)}", stream=True, timeout=self._timeout)
         response.raise_for_status()
         return Message(message_id, response, self)
 
-    def retrieve_message_chunk(self, message_id: str, chunk_num: Union[int, str]):
+    def retrieve_message_chunk(self, message_id: str, chunk_num: Union[int, str]) -> Response:
+        """
+            get a chunk
+            https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/inbox/-message_id-/-chunk_number-
+        Args:
+            message_id (str): message id to receive
+            chunk_num (int): chunk number
+
+        Returns:
+            Response: http response
+        """
         response = self._session.get(
             f"{self.mailbox_url}/inbox/{q(message_id)}/{chunk_num}",
             stream=True,
@@ -432,6 +536,8 @@ class MeshClient:
     ) -> str:
         """
         Send a message to recipient containing data.
+
+        https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#post-/messageexchange/-mailbox_id-/outbox
 
         This method optionally allows the user to provide the following keyword
         arguments, which specify properties of the message, and map to
@@ -481,18 +587,19 @@ class MeshClient:
                 raise TypeError(f"Unrecognised keyword argument '{key}'.  optional arguments are: {optional_args}")
 
         if transparent_compress:
-            headers["Mex-Content-Compress"] = "Y"
             headers["Content-Encoding"] = "gzip"
 
         max_chunk_size = max_chunk_size or self._max_chunk_size
         chunks = SplitStream(data, max_chunk_size)
         headers["Mex-Chunk-Range"] = f"1:{len(chunks)}"
+
         chunk_iterator = iter(chunks)
 
-        chunk1 = maybe_compressed(next(chunk_iterator))
+        first_chunk = maybe_compressed(next(chunk_iterator))
+
         response1 = self._session.post(
             f"{self.mailbox_url}/outbox",
-            data=chunk1,
+            data=first_chunk,
             headers=headers,
             timeout=self._timeout,
         )
@@ -501,65 +608,52 @@ class MeshClient:
             response1.raise_for_status()
 
         response_dict = response1.json()
-        if response1.status_code == 417 or "errorDescription" in response_dict:
-            error_response = cast(SendMessageErrorResponse_v1, response_dict)
-            raise MeshError(error_response["errorDescription"], error_response)
+        if _looks_like_send_error(response1.status_code, response_dict):
+            msg, error_response = _get_send_error_message(response_dict)
+            raise MeshError(msg, error_response)
 
         if response1.status_code not in (200, 202):
             raise MeshError(response_dict)
 
-        success_response = cast(SendMessageResponse_v1, response_dict)
+        success_response = cast(SendMessageResponse_v2, response_dict)
 
-        message_id = success_response["messageID"]
+        message_id = success_response["message_id"]
 
-        for i, chunk in enumerate(chunk_iterator):
+        for chunk_num, chunk in enumerate(chunk_iterator, start=2):
             data = maybe_compressed(chunk)
 
-            if self._max_chunk_retries > 0:
-                if hasattr(data, "read"):
-                    data = data.read()
-                buf = BytesIO(data)
-            else:
-                buf = data
+            buffer = data
+            if self._retries:
+                # urllib3 body_pos requires a seekable stream to allow rewinding on retry
+                buffer = BytesIO(data.read() if hasattr(data, "read") else data)
 
-            chunk_num = i + 2
             headers = {
                 "Content-Type": "application/octet-stream",
                 "Mex-Chunk-Range": f"{chunk_num}:{len(chunks)}",
                 "Mex-From": self._mailbox,
             }
             if transparent_compress:
-                headers["Mex-Content-Compress"] = "Y"
                 headers["Content-Encoding"] = "gzip"
 
-            for i in range(self._max_chunk_retries + 1):
-                if self._max_chunk_retries > 0:
-                    buf.seek(0)
+            response = self._session.post(
+                f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_num}",
+                data=buffer,
+                headers=headers,
+                timeout=self._timeout,
+            )
 
-                # non-linear delay in terms of squares
-                time.sleep(i**2)
+            # check other successful response codes
+            if response.status_code in (200, 202):
+                continue
 
-                response = self._session.post(
-                    f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_num}",
-                    data=buf,
-                    headers=headers,
-                    timeout=self._timeout,
-                )
-
-                # check other successful response codes
-                if response.status_code in (200, 202):
-                    break
-
-                if i < self._max_chunk_retries:
-                    continue
-
-                response.raise_for_status()
+            response.raise_for_status()
 
         return message_id
 
     def acknowledge_message(self, message_id: str):
         """
         Acknowledge a message_id, deleting it from MESH.
+        https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#put-/messageexchange/-mailbox_id-/inbox/-message_id-/status/acknowledged
         """
         message_id = getattr(message_id, "_msg_id", message_id)
         response = self._session.put(
@@ -568,14 +662,78 @@ class MeshClient:
         )
         response.raise_for_status()
 
+    def iterate_message_ids(
+        self, workflow_filter: Optional[str] = None, batch_size: Optional[int] = None
+    ) -> Generator[str, None, None]:
+        """
+            generator lists messages ids in the inbox;
+
+        Args:
+            batch_size (Optional[int]): optional max results to limit the page size this will not limit the
+            TOTAL results of the generator ... just limit the page size
+            workflow_filter (Optional[str]): workflow filter string
+
+        Returns:
+            Generator[str]: message ids
+        """
+
+        params: Dict[str, Union[int, str]] = {}
+        if batch_size:
+            if batch_size < 10:
+                raise ValueError("if set batch_size should be >= 10")
+            params["max_results"] = batch_size
+
+        if workflow_filter:
+            params["workflow_filter"] = workflow_filter
+
+        def _next_messages(page_result: ListMessageResponse_v2) -> Tuple[Optional[str], List[str]]:
+            return cast(Dict[str, str], page_result.get("links", {})).get("next"), cast(
+                List[str], page_result.get("messages", [])
+            )
+
+        result = self._inbox_v2_page(params=params)
+        next_page, messages = _next_messages(result)
+        yield from messages
+        while next_page:
+            result = self._inbox_v2_page(url=next_page)
+            next_page, messages = _next_messages(result)
+            yield from messages
+
+    def iterate_messages(self, workflow_filter: Optional[str] = None, batch_size: Optional[int] = None):
+        """
+            generator lists messages ids in the inbox;
+            Iterate over a list of Message objects for all messages in the user's
+            inbox. This is provided as a convenience function, but will be
+            slower than list_messages if only the message_ids are needed, since it
+            will also begin to download messages.
+
+        Args:
+            batch_size (Optional[int]): optional max results to limit the page size
+            workflow_filter (Optional[str]): workflow filter string
+
+        Returns:
+            Generator[Message]: messages in inbox
+        """
+
+        for msg_id in self.iterate_message_ids(workflow_filter=workflow_filter, batch_size=batch_size):
+            yield self.retrieve_message(msg_id)
+
     def iterate_all_messages(self):
         """
-        Iterate over a list of Message objects for all messages in the user's
-        inbox. This is provided as a convenience function, but will be
-        slower than list_messages if only the message_ids are needed, since it
-        will also begin to download messages.
+            generator lists messages ids in the inbox;
+            Iterate over a list of Message objects for all messages in the user's
+            inbox. This is provided as a convenience function, but will be
+            slower than list_messages if only the message_ids are needed, since it
+            will also begin to download messages.
+
+        Args:
+            page_size (Optional[int]): optional max results to limit the page size, will not limit the tota
+
+        Returns:
+            Generator[Message]: messages in inbox
         """
-        for msg_id in self.list_messages():
+
+        for msg_id in self.iterate_message_ids():
             yield self.retrieve_message(msg_id)
 
     def close(self):

@@ -3,6 +3,11 @@ MESH Client
 
 A Python client for [NHS Digital's MESH API](https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api).
 
+Release Notes
+------------
+see [CHANGE-LOG](CHANGE-LOG.md) for news on major changes
+
+
 Installation
 ------------
 
@@ -14,14 +19,15 @@ Example use
 -----------
 
 ```python
-from mesh_client import MeshClient, NHS_DEP_ENDPOINT
-with MeshClient(
-          NHS_DEP_ENDPOINT,
-          'MYMAILBOX',
-          'Password',
-          cert=('/etc/certs/cert.pem', '/etc/certs/key.pem')  # Mesh uses SSL, so you'll need some certs
-        ) as client:
+from mesh_client import MeshClient, INT_ENDPOINT
+# or LIVE_ENDPOINT
 
+with MeshClient(
+        INT_ENDPOINT,
+    'MYMAILBOX',
+    'Password',
+    cert=('/etc/certs/cert.pem', '/etc/certs/key.pem')  # Mesh uses SSL, so you'll need some certs
+) as client:
     client.handshake()  # It will work without this, but Spine will complain
     message_ids = client.list_messages()
     first_message = client.retrieve_message(message_ids[0])
@@ -31,7 +37,7 @@ with MeshClient(
 
     # Alternatively, iterate
     for message in client.iterate_all_messages():
-        with message: # With block will handle acknowledgement
+        with message:  # With block will handle acknowledgement
             print('Message', message.read())
 
     client.send_message('RECIPIENT_MAILBOX', b'Hello World!', subject='Important message')

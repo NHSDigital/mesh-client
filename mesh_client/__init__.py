@@ -5,15 +5,16 @@ import functools
 import hmac
 import os.path
 import platform
+import socket  # noqa: F401
 import ssl
 import sys
-import time
 import uuid
 import warnings
 from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
 from itertools import chain
+from types import TracebackType
 from typing import Any, Dict, Generator, List, Optional, Tuple, TypeVar, Union, cast
 from urllib.parse import quote as q
 from urllib.parse import urlparse
@@ -21,7 +22,14 @@ from urllib.parse import urlparse
 import requests
 from requests import Response
 from requests.adapters import HTTPAdapter
-from urllib3.util.ssl_ import create_urllib3_context
+from urllib3 import BaseHTTPResponse
+from urllib3.connectionpool import ConnectionPool
+from urllib3.exceptions import (
+    ResponseError,
+)
+from urllib3.util import create_urllib3_context
+from urllib3.util.retry import Retry
+from urllib3.util.util import reraise
 
 from .io_helpers import (
     CombineStreams,
@@ -143,6 +151,65 @@ class MeshError(Exception):
     pass
 
 
+def _looks_like_send_error(status_code: int, response_dict: dict) -> bool:
+    if status_code == 417:
+        return True
+    if "errorDescription" in response_dict:
+        return True
+
+    if "detail" in response_dict:
+        return True
+
+    return False
+
+
+def _get_send_error_message(
+    response_dict: dict,
+) -> Tuple[str, Union[SendMessageErrorResponse_v1, SendMessageErrorResponse_v2, dict]]:
+    if "errorDescription" in response_dict:
+        return response_dict["errorDescription"], cast(SendMessageErrorResponse_v1, response_dict)
+
+    if "detail" in response_dict:
+        msg = (response_dict.get("detail") or [{"msg": response_dict.get("internal_id", "unknown")}])[0].get("msg")
+        return msg, cast(SendMessageErrorResponse_v2, response_dict)
+
+    return "unknown", response_dict
+
+
+class MeshRetry(Retry):
+    """
+    requests doesn't support disabling retry on an individual request, and to avoid creating duplicate messages
+    we will not retry post requests to the base outbox url .... but other chunk posts are retryable
+    """
+
+    def increment(
+        self,
+        method: Optional[str] = None,
+        url: Optional[str] = None,
+        response: Optional[BaseHTTPResponse] = None,
+        error: Optional[Exception] = None,
+        _pool: Optional[ConnectionPool] = None,
+        _stacktrace: Optional[TracebackType] = None,
+    ) -> Retry:
+        if method != "POST" or not url or not url.endswith("/outbox"):
+            return super().increment(method, url, response, error, _pool, _stacktrace)
+
+        if error:
+            raise reraise(type(error), error, _stacktrace)
+
+        if response and response.get_redirect_location():
+            cause = "too many redirects"
+        else:
+            cause = ResponseError.GENERIC_ERROR
+            if response and response.status:
+                cause = ResponseError.SPECIFIC_ERROR.format(status_code=response.status)
+
+        if _stacktrace:
+            raise ResponseError(cause).with_traceback(_stacktrace)
+
+        raise ResponseError(cause)
+
+
 class SSLContextAdapter(HTTPAdapter):
     def __init__(
         self,
@@ -150,13 +217,14 @@ class SSLContextAdapter(HTTPAdapter):
         verify: Optional[Union[str, bool]] = None,
         check_hostname: Optional[bool] = None,
         hostname_checks_common_name: Optional[bool] = None,
+        max_retries: Union[int, Retry] = 0,
     ):
         self.cert = cert
         self.verify = verify
         self.check_hostname = check_hostname
         self.hostname_checks_common_name = hostname_checks_common_name
 
-        super().__init__()
+        super().__init__(max_retries=max_retries)
 
     def create_ssl_context(self) -> ssl.SSLContext:
         context = cast(ssl.SSLContext, create_urllib3_context())
@@ -199,31 +267,6 @@ class SSLContextAdapter(HTTPAdapter):
         return super().proxy_manager_for(proxy, **proxy_kwargs)
 
 
-def _looks_like_send_error(status_code: int, response_dict: dict) -> bool:
-    if status_code == 417:
-        return True
-    if "errorDescription" in response_dict:
-        return True
-
-    if "detail" in response_dict:
-        return True
-
-    return False
-
-
-def _get_send_error_message(
-    response_dict: dict,
-) -> Tuple[str, Union[SendMessageErrorResponse_v1, SendMessageErrorResponse_v2, dict]]:
-    if "errorDescription" in response_dict:
-        return response_dict["errorDescription"], cast(SendMessageErrorResponse_v1, response_dict)
-
-    if "detail" in response_dict:
-        msg = (response_dict.get("detail") or [{"msg": response_dict.get("internal_id", "unknown")}])[0].get("msg")
-        return msg, cast(SendMessageErrorResponse_v2, response_dict)
-
-    return "unknown", response_dict
-
-
 class MeshClient:
     """
     A class representing a single MESH session, for a given user on a given
@@ -231,7 +274,7 @@ class MeshClient:
     transparently.
     """
 
-    def __init__(
+    def __init__(  # noqa: C901
         self,
         url: Union[str, Endpoint],
         mailbox: str,
@@ -244,7 +287,10 @@ class MeshClient:
         max_chunk_size=75 * 1024 * 1024,
         proxies: Optional[Dict[str, str]] = None,
         transparent_compress: bool = False,
-        max_chunk_retries: int = 0,
+        max_retries: Union[int, Retry] = 3,
+        retry_backoff_factor: Union[int, float] = 0.5,
+        retry_status_force_list: Tuple[int, ...] = (425, 429, 502, 503, 504),
+        retry_methods: Tuple[str, ...] = ("HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"),
         timeout: Union[int, float] = 10 * 60,
     ):
         """
@@ -283,7 +329,7 @@ class MeshClient:
             if endpoint_config:
                 url = endpoint_config
 
-        self._url = url.url if hasattr(url, "url") else url
+        self._url = (url.url if hasattr(url, "url") else url).rstrip("/")
 
         if verify is None and hasattr(url, "verify"):
             verify = url.verify
@@ -301,8 +347,25 @@ class MeshClient:
             self._session.verify = False
 
         url_lower = self._url.lower()
+
+        self._retries: Union[int, Retry] = 0
+        if isinstance(max_retries, Retry):
+            self._retries = max_retries
+        elif max_retries:
+            self._retries = MeshRetry(
+                total=max_retries,
+                backoff_factor=retry_backoff_factor,
+                status_forcelist=retry_status_force_list,
+                allowed_methods=retry_methods,
+            )
+
         if url_lower.startswith("https://"):
-            self._session.mount(self._url, SSLContextAdapter(cert, verify, check_hostname, hostname_checks_common_name))
+            self._session.mount(
+                self._url,
+                SSLContextAdapter(cert, verify, check_hostname, hostname_checks_common_name, max_retries=self._retries),
+            )
+        else:
+            self._session.mount(self._url, HTTPAdapter(max_retries=self._retries))
 
         if ".ncrs.nhs.uk" in url_lower:
             warnings.warn(
@@ -325,7 +388,6 @@ class MeshClient:
         self._mailbox = mailbox
         self._max_chunk_size = max_chunk_size
         self._transparent_compress = transparent_compress
-        self._max_chunk_retries = max_chunk_retries
         self._timeout = timeout
         self._close_called = False
 
@@ -335,7 +397,7 @@ class MeshClient:
 
     @property
     def mailbox_url(self) -> str:
-        return f"{self._url.rstrip('/')}{self.mailbox_path}"
+        return f"{self._url}{self.mailbox_path}"
 
     def ping(self) -> dict:
         """
@@ -436,16 +498,13 @@ class MeshClient:
 
         return cast(List[str], result.get("messages", []))
 
-    def retrieve_message(self, message_id: str, headers: Optional[Dict[str, str]] = None) -> "Message":
+    def retrieve_message(self, message_id: str) -> "Message":
         """
         Retrieve a message based on its message_id. This will return a Message object
         https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/inbox/-message_id-
         """
         message_id = getattr(message_id, "_msg_id", message_id)
-        headers = headers or {}
-        response = self._session.get(
-            f"{self.mailbox_url}/inbox/{q(message_id)}", stream=True, timeout=self._timeout, headers=headers
-        )
+        response = self._session.get(f"{self.mailbox_url}/inbox/{q(message_id)}", stream=True, timeout=self._timeout)
         response.raise_for_status()
         return Message(message_id, response, self)
 
@@ -528,7 +587,6 @@ class MeshClient:
                 raise TypeError(f"Unrecognised keyword argument '{key}'.  optional arguments are: {optional_args}")
 
         if transparent_compress:
-            headers["Mex-Content-Compress"] = "Y"
             headers["Content-Encoding"] = "gzip"
 
         max_chunk_size = max_chunk_size or self._max_chunk_size
@@ -537,11 +595,11 @@ class MeshClient:
 
         chunk_iterator = iter(chunks)
 
-        chunk1 = maybe_compressed(next(chunk_iterator))
+        first_chunk = maybe_compressed(next(chunk_iterator))
 
         response1 = self._session.post(
             f"{self.mailbox_url}/outbox",
-            data=chunk1,
+            data=first_chunk,
             headers=headers,
             timeout=self._timeout,
         )
@@ -554,52 +612,41 @@ class MeshClient:
             msg, error_response = _get_send_error_message(response_dict)
             raise MeshError(msg, error_response)
 
+        if response1.status_code not in (200, 202):
+            raise MeshError(response_dict)
+
         success_response = cast(SendMessageResponse_v2, response_dict)
 
         message_id = success_response["message_id"]
 
-        for i, chunk in enumerate(chunk_iterator):
+        for chunk_num, chunk in enumerate(chunk_iterator, start=2):
             data = maybe_compressed(chunk)
 
-            if self._max_chunk_retries > 0:
-                if hasattr(data, "read"):
-                    data = data.read()
-                buf = BytesIO(data)
-            else:
-                buf = data
+            buffer = data
+            if self._retries:
+                # urllib3 body_pos requires a seekable stream to allow rewinding on retry
+                buffer = BytesIO(data.read() if hasattr(data, "read") else data)
 
-            chunk_num = i + 2
             headers = {
                 "Content-Type": "application/octet-stream",
                 "Mex-Chunk-Range": f"{chunk_num}:{len(chunks)}",
                 "Mex-From": self._mailbox,
             }
             if transparent_compress:
-                headers["Mex-Content-Compress"] = "Y"
                 headers["Content-Encoding"] = "gzip"
 
-            for i in range(self._max_chunk_retries + 1):
-                if self._max_chunk_retries > 0:
-                    buf.seek(0)
+            response = self._session.post(
+                f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_num}",
+                data=buffer,
+                headers=headers,
+                timeout=self._timeout,
+            )
 
-                # non-linear delay in terms of squares
-                time.sleep(i**2)
+            # check other successful response codes
+            if response.status_code in (200, 202):
+                continue
 
-                response = self._session.post(
-                    f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_num}",
-                    data=buf,
-                    headers=headers,
-                    timeout=self._timeout,
-                )
-
-                # check other successful response codes
-                if response.status_code in (200, 202):
-                    break
-
-                if i < self._max_chunk_retries:
-                    continue
-
-                response.raise_for_status()
+            response.raise_for_status()
 
         return message_id
 
@@ -616,13 +663,14 @@ class MeshClient:
         response.raise_for_status()
 
     def iterate_message_ids(
-        self, workflow_filter: Optional[str] = None, page_size: Optional[int] = None
+        self, workflow_filter: Optional[str] = None, batch_size: Optional[int] = None
     ) -> Generator[str, None, None]:
         """
             generator lists messages ids in the inbox;
 
         Args:
-            page_size (Optional[int]): optional max results to limit the page size
+            batch_size (Optional[int]): optional max results to limit the page size this will not limit the
+            TOTAL results of the generator ... just limit the page size
             workflow_filter (Optional[str]): workflow filter string
 
         Returns:
@@ -630,10 +678,10 @@ class MeshClient:
         """
 
         params: Dict[str, Union[int, str]] = {}
-        if page_size:
-            if page_size < 10:
-                raise ValueError("if set page_size should be >= 10")
-            params["max_results"] = page_size
+        if batch_size:
+            if batch_size < 10:
+                raise ValueError("if set batch_size should be >= 10")
+            params["max_results"] = batch_size
 
         if workflow_filter:
             params["workflow_filter"] = workflow_filter
@@ -651,7 +699,7 @@ class MeshClient:
             next_page, messages = _next_messages(result)
             yield from messages
 
-    def iterate_all_messages(self, workflow_filter: Optional[str] = None, page_size: Optional[int] = None):
+    def iterate_messages(self, workflow_filter: Optional[str] = None, batch_size: Optional[int] = None):
         """
             generator lists messages ids in the inbox;
             Iterate over a list of Message objects for all messages in the user's
@@ -660,14 +708,32 @@ class MeshClient:
             will also begin to download messages.
 
         Args:
-            page_size (Optional[int]): optional max results to limit the page size
+            batch_size (Optional[int]): optional max results to limit the page size
             workflow_filter (Optional[str]): workflow filter string
 
         Returns:
             Generator[Message]: messages in inbox
         """
 
-        for msg_id in self.iterate_message_ids(workflow_filter=workflow_filter, page_size=page_size):
+        for msg_id in self.iterate_message_ids(workflow_filter=workflow_filter, batch_size=batch_size):
+            yield self.retrieve_message(msg_id)
+
+    def iterate_all_messages(self):
+        """
+            generator lists messages ids in the inbox;
+            Iterate over a list of Message objects for all messages in the user's
+            inbox. This is provided as a convenience function, but will be
+            slower than list_messages if only the message_ids are needed, since it
+            will also begin to download messages.
+
+        Args:
+            page_size (Optional[int]): optional max results to limit the page size, will not limit the tota
+
+        Returns:
+            Generator[Message]: messages in inbox
+        """
+
+        for msg_id in self.iterate_message_ids():
             yield self.retrieve_message(msg_id)
 
     def close(self):

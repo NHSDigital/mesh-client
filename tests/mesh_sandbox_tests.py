@@ -1,8 +1,5 @@
 import io
 import os.path
-import signal
-import sys
-import traceback
 from typing import List, cast
 from uuid import uuid4
 
@@ -17,15 +14,6 @@ alice_mailbox = "ALICE"
 alice_password = "password"
 bob_mailbox = "BOB"
 bob_password = "password"
-
-
-def print_stack_frames(signum=None, frame=None):
-    for frame in sys._current_frames().values():
-        traceback.print_stack(frame)
-        print()
-
-
-signal.signal(signal.SIGUSR1, print_stack_frames)
 
 
 class TestError(Exception):
@@ -270,7 +258,7 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
 def test_msg_id_tracking_message_not_found(alice: MeshClient, bob: MeshClient):
     with pytest.raises(HTTPError) as err:
         assert alice.track_message(message_id=uuid4().hex)
-
+    assert err.value.response is not None
     assert err.value.response.status_code == 404
 
 

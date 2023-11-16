@@ -1,5 +1,9 @@
 import contextlib
+import json
 import os
+from typing import Mapping, Optional
+
+from werkzeug import Response
 
 from mesh_client import Endpoint
 
@@ -39,3 +43,27 @@ def temp_env_vars(**kwargs):
     finally:
         os.environ.clear()
         os.environ.update(old_environ)
+
+
+def json_response(
+    response: dict,
+    status: int = 200,
+    content_type: str = "application/vnd.mesh.v2+json",
+    headers: Optional[Mapping[str, str]] = None,
+) -> Response:
+    return Response(response=json.dumps(response), status=status, content_type=content_type, headers=headers)
+
+
+def bytes_response(
+    response: bytes,
+    status: int = 200,
+    content_type: str = "application/octet-stream",
+    headers: Optional[Mapping[str, str]] = None,
+) -> Response:
+    return Response(response=response, status=status, content_type=content_type, headers=headers)
+
+
+def plain_response(
+    response: str, status: int = 200, content_type: str = "text/plain", headers: Optional[Mapping[str, str]] = None
+) -> Response:
+    return Response(response=response, status=status, content_type=content_type, headers=headers)

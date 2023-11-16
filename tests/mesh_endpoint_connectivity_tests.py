@@ -37,6 +37,7 @@ def test_hscn_endpoints(name: str, endpoint: Endpoint):
     ) as client:
         client.ping()
 
+    assert err.value.response is not None
     assert err.value.response.status_code == 400
 
 
@@ -48,6 +49,8 @@ def test_hscn_endpoints_verify_false(name: str, endpoint: Endpoint):
     ) as client:
         client.ping()
 
+    assert err.value.response is not None
+
     assert err.value.response.status_code == 400
 
 
@@ -58,6 +61,8 @@ def test_hscn_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
         endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
     ) as client:
         client.ping()
+
+    assert err.value.response is not None
 
     assert err.value.response.status_code == 400
 
@@ -152,6 +157,8 @@ def test_hscn_endpoints_check_hostname(name: str, endpoint: Endpoint, check_host
     ) as client:
         client.ping()
 
+    assert err.value.response is not None
+
     assert err.value.response.status_code == 400
 
 
@@ -186,6 +193,7 @@ def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
         proxies={"https": "http://localhost:8019"},
     ) as client:
         client.ping()
+    assert err.value.response is not None
 
     assert err.value.response.status_code == 400
 
@@ -197,6 +205,8 @@ def test_hscn_endpoints_via_an_ambient_proxy(name: str, endpoint: Endpoint):
         endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
     ) as client:
         client.ping()
+
+    assert err.value.response is not None
 
     assert err.value.response.status_code == 400
 

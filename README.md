@@ -5,7 +5,7 @@ A Python client for [NHS Digital's MESH API](https://digital.nhs.uk/developer/ap
 
 Release Notes
 ------------
-see [RELEASES](RELEASES.md) for news on major changes
+see [CHANGE-LOG](CHANGE-LOG.md) for news on major changes
 
 
 Installation
@@ -19,13 +19,14 @@ Example use
 -----------
 
 ```python
-from mesh_client import MeshClient, DEPRECATED_HSCN_DEP_ENDPOINT
+from mesh_client import MeshClient, INT_ENDPOINT
+# or LIVE_ENDPOINT
 
 with MeshClient(
-        DEPRECATED_HSCN_DEP_ENDPOINT,
-        'MYMAILBOX',
-        'Password',
-        cert=('/etc/certs/cert.pem', '/etc/certs/key.pem')  # Mesh uses SSL, so you'll need some certs
+        INT_ENDPOINT,
+    'MYMAILBOX',
+    'Password',
+    cert=('/etc/certs/cert.pem', '/etc/certs/key.pem')  # Mesh uses SSL, so you'll need some certs
 ) as client:
     client.handshake()  # It will work without this, but Spine will complain
     message_ids = client.list_messages()

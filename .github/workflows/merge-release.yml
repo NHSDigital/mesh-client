@@ -71,6 +71,7 @@ jobs:
 
       - name: install and test
         run: |
+          python3 -m pip install requests 
           python3 -m pip install --index-url https://test.pypi.org/simple/ "mesh-client==${RELEASE_VERSION}"
           INSTALLED_VERSION="$(python3 -c 'import mesh_client; print(mesh_client.__version__)')"
           if [[ "${INSTALLED_VERSION}" != "${RELEASE_VERSION}" ]]; then

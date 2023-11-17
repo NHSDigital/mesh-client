@@ -7,7 +7,7 @@ import os
 from os.path import dirname, join
 
 import toml  # type: ignore[import]
-from setuptools import setup  # type: ignore[import]
+from setuptools import setup, sic  # type: ignore[import]
 
 with open(join(dirname(__file__), "pyproject.toml")) as f:
     pyproject = toml.loads(f.read())
@@ -21,7 +21,7 @@ with open(join(dirname(__file__), poetry_cfg["readme"])) as f:
 
 setup(
     name=poetry_cfg["name"],
-    version=os.environ.get("RELEASE_VERSION", poetry_cfg["version"]),
+    version=sic(os.environ.get("RELEASE_VERSION", poetry_cfg["version"])),
     description=poetry_cfg["description"],
     url=poetry_cfg["repository"],
     long_description=long_description,

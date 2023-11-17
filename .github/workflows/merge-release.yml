@@ -1,83 +1,10 @@
-name: merge-release
+name: create-release
 on:
   push:
-    branches:
-      - release
+    tags:
+      - '[0-9]+\.[0-9]+\.[0-9]+'
 
 jobs:
-
-  test-publish:
-    runs-on: ubuntu-latest
-    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]'
-    steps:
-      - name: checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: print branch info
-        run: |
-          git branch
-          echo "GITHUB_HEAD_REF=${GITHUB_HEAD_REF}"
-          echo "GITHUB_BASE_REF=${GITHUB_BASE_REF}"
-          git log --oneline -n 10
-
-      - name: clean
-        run: |
-          git clean -fdx
-          find . -type f | xargs chmod g+w
-
-      - name: merge into base_branch
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
-          git checkout "${{ github.base_ref }}"
-          git checkout -b "merging-${{ github.event.number }}"
-          git merge --ff-only "${{ github.event.pull_request.head.sha }}"
-
-      - name: setup python
-        uses: actions/setup-python@v3
-        with:
-          python-version: "3.8"
-
-      - name: setup poetry
-        uses: abatilo/actions-poetry@v2
-        with:
-          poetry-version: 1.5.1
-
-      - name: add poetry plugins
-        run: |
-          poetry self add "poetry-dynamic-versioning[plugin]"
-
-      - name: build dist
-        run: |
-          RELEASE_VERSION="$(poetry version patch | rev | cut -d' ' -f1 | rev)"
-          echo "${RELEASE_VERSION}"
-          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
-          if [[ "${RELEASE_VERSION}" == "0.0.0" ]]; then
-            echo "${RELEASE_VERSION} = 0.0.0"
-            exit 1
-          fi
-          git tag "${RELEASE_VERSION}"
-          RELEASE_VERSION="${RELEASE_VERSION}" make dist
-          ls -l dist
-
-      - name: test publish
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
-          repository-url: https://test.pypi.org/legacy/
-
-      - name: install and test
-        run: |
-          python3 -m pip install requests 
-          python3 -m pip install --index-url https://test.pypi.org/simple/ "mesh-client==${RELEASE_VERSION}"
-          INSTALLED_VERSION="$(python3 -c 'import mesh_client; print(mesh_client.__version__)')"
-          if [[ "${INSTALLED_VERSION}" != "${RELEASE_VERSION}" ]]; then
-            echo "${INSTALLED_VERSION} != ${RELEASE_VERSION}"
-            exit 1
-          fi
 
   release:
     runs-on: ubuntu-latest

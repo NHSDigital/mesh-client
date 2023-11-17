@@ -28,6 +28,7 @@ classifiers = [
 # core dependencies
 python = ">=3.7"
 requests = ">=2.26.0"
+urllib3 = ">=2.0.2"
 
 
 [tool.poetry.group.dev.dependencies]

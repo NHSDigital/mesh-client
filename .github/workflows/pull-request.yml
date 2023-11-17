@@ -15,7 +15,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -64,7 +64,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -190,7 +190,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -270,7 +270,7 @@ jobs:
       - tox
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 

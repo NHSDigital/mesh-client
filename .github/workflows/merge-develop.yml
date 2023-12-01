@@ -58,7 +58,7 @@ jobs:
 
       - name: setup java
         if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: "corretto"
           java-version: "17"

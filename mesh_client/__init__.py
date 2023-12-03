@@ -322,6 +322,12 @@ class MeshClient:
 
         shared_key = shared_key or get_shared_key_from_environ()
 
+        self._mailbox = mailbox
+        self._max_chunk_size = max_chunk_size
+        self._transparent_compress = transparent_compress
+        self._timeout = timeout
+        self._close_called = False
+
         self._session = requests.Session()
 
         if isinstance(url, str):
@@ -382,14 +388,10 @@ class MeshClient:
             ),
             "Accept-Encoding": "gzip",
         }
+
         self._session.auth = AuthTokenGenerator(shared_key, mailbox, password)
 
         self._session.proxies = proxies or {}
-        self._mailbox = mailbox
-        self._max_chunk_size = max_chunk_size
-        self._transparent_compress = transparent_compress
-        self._timeout = timeout
-        self._close_called = False
 
     @property
     def mailbox_path(self) -> str:

@@ -15,21 +15,19 @@ from hashlib import sha256
 from io import BytesIO
 from itertools import chain
 from types import TracebackType
-from typing import Any, Dict, Generator, List, Optional, Tuple, TypeVar, Union, cast
+from typing import Any, Dict, Generator, List, NoReturn, Optional, Tuple, Type, TypeVar, Union, cast
 from urllib.parse import quote as q
 from urllib.parse import urlparse
 
 import requests
 from requests import Response
 from requests.adapters import HTTPAdapter
-from urllib3 import BaseHTTPResponse
 from urllib3.connectionpool import ConnectionPool
 from urllib3.exceptions import (
     ResponseError,
 )
-from urllib3.util import create_urllib3_context
 from urllib3.util.retry import Retry
-from urllib3.util.util import reraise
+from urllib3.util.ssl_ import create_urllib3_context
 
 from .io_helpers import (
     CombineStreams,
@@ -116,6 +114,21 @@ ENDPOINTS = [(name, endpoint) for name, endpoint in locals().items() if name.end
 _HOSTNAME_ENDPOINT_MAP = {urlparse(ep.url).hostname: ep for name, ep in ENDPOINTS}
 
 
+# urllib3 'futures' ( not part of 1.26 .. but available in  2.x )
+def reraise(
+    tp: Optional[Type[BaseException]],
+    value: BaseException,
+    tb: Optional[TracebackType] = None,
+) -> NoReturn:
+    try:
+        if value.__traceback__ is not tb:
+            raise value.with_traceback(tb)
+        raise value
+    finally:
+        value = None  # type: ignore[assignment]
+        tb = None
+
+
 def try_get_endpoint_from_url(url: str) -> Optional[Endpoint]:
     url_parsed = urlparse(url)
     if not url_parsed.hostname:
@@ -186,7 +199,7 @@ class MeshRetry(Retry):
         self,
         method: Optional[str] = None,
         url: Optional[str] = None,
-        response: Optional[BaseHTTPResponse] = None,
+        response=None,
         error: Optional[Exception] = None,
         _pool: Optional[ConnectionPool] = None,
         _stacktrace: Optional[TracebackType] = None,

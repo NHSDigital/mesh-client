@@ -305,6 +305,7 @@ class MeshClient:
         retry_status_force_list: Tuple[int, ...] = (425, 429, 502, 503, 504),
         retry_methods: Tuple[str, ...] = ("HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"),
         timeout: Union[int, float] = 10 * 60,
+        application_name: Optional[str] = None,
     ):
         """
         Create a new MeshClient.
@@ -342,6 +343,8 @@ class MeshClient:
         self._close_called = False
 
         self._session = requests.Session()
+        application_name = (application_name or "").strip()
+        self._client_name = f"{application_name};mesh_client" if application_name else "mesh_client"
 
         if isinstance(url, str):
             endpoint_config = try_get_endpoint_from_url(url)
@@ -396,7 +399,7 @@ class MeshClient:
         self._session.headers = {
             "Accept": "application/vnd.mesh.v2+json",
             "User-Agent": (
-                f"mesh_client;{__version__};N/A;{platform.processor() or platform.machine()};"
+                f"{self._client_name};{__version__};N/A;{platform.processor() or platform.machine()};"
                 f"{platform.system()};{platform.release()} {platform.version()}"
             ),
             "Accept-Encoding": "gzip",
@@ -430,7 +433,7 @@ class MeshClient:
         https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#post-/messageexchange/-mailbox_id-
         """
         headers = {
-            "mex-ClientVersion": f"mesh_client=={__version__}",
+            "mex-ClientVersion": f"{self._client_name}=={__version__}",
             "mex-OSArchitecture": platform.processor() or platform.machine(),
             "mex-OSName": platform.system(),
             "mex-OSVersion": f"{platform.release()} {platform.version()}",
@@ -547,6 +550,7 @@ class MeshClient:
         recipient: str,
         data,
         max_chunk_size: Optional[int] = None,
+        transparent_compress: Optional[bool] = None,
         **kwargs,
     ) -> str:
         """
@@ -577,7 +581,7 @@ class MeshClient:
         client will not attempt to compress or decompress data. Transparent
         compression for sending is enabled as a constructor option.
         """
-        transparent_compress = self._transparent_compress
+        transparent_compress = self._transparent_compress if transparent_compress is None else transparent_compress
 
         def maybe_compressed(maybe_compress: bytes):
             if not transparent_compress:

@@ -73,7 +73,7 @@ DEP_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-dep-ca-bundle.pem")
 LIVE_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-live-ca-bundle.pem")
 
 
-_OPTIONAL_HEADERS = {
+_OPTIONAL_HEADERS: Dict[str, str] = {
     "workflow_id": "Mex-WorkflowID",
     "filename": "Mex-FileName",
     "local_id": "Mex-LocalID",
@@ -84,6 +84,11 @@ _OPTIONAL_HEADERS = {
     "partner_id": "Mex-PartnerID",
     "content_type": "Content-Type",
 }
+
+
+def optional_header_map() -> Dict[str, str]:
+    return _OPTIONAL_HEADERS.copy()
+
 
 _SEND_HEADERS = {**_OPTIONAL_HEADERS}
 _SEND_HEADERS.update(
@@ -345,7 +350,8 @@ class MeshClient:
         and whether messages should be compressed, transparently, before
         sending.
         """
-
+        if isinstance(shared_key, str):
+            shared_key = shared_key.encode(encoding="utf-8")
         shared_key = shared_key or get_shared_key_from_environ()
 
         self._mailbox = mailbox
@@ -534,23 +540,29 @@ class MeshClient:
         https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/inbox/-message_id-
         """
         message_id = getattr(message_id, "_msg_id", message_id)
-        response = self._session.get(f"{self.mailbox_url}/inbox/{q(message_id)}", stream=True, timeout=self._timeout)
-        response.raise_for_status()
+        response = self.retrieve_message_chunk(message_id, chunk_num=1)
         return Message(message_id, response, self)
 
-    def retrieve_message_chunk(self, message_id: str, chunk_num: Union[int, str]) -> Response:
+    def retrieve_message_chunk(self, message_id: str, chunk_num: int) -> Response:
         """
             get a chunk
             https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/inbox/-message_id-/-chunk_number-
         Args:
-            message_id (str): message id to receive
-            chunk_num (int): chunk number
+            message_id: message id to receive
+            chunk_num: chunk number
 
         Returns:
             Response: http response
         """
+        chunk_num = int(chunk_num)
+        uri = (
+            f"{self.mailbox_url}/inbox/{q(message_id)}/{chunk_num}"
+            if chunk_num > 1
+            else f"{self.mailbox_url}/inbox/{q(message_id)}"
+        )
+
         response = self._session.get(
-            f"{self.mailbox_url}/inbox/{q(message_id)}/{chunk_num}",
+            uri,
             stream=True,
             timeout=self._timeout,
         )
@@ -558,12 +570,14 @@ class MeshClient:
         return response
 
     @staticmethod
-    def _headers(recipient: str, chunk_no: int, total_chunks: int, compress: bool, **kwargs) -> Dict[str, str]:
+    def _headers_for_chunk(
+        recipient: str, chunk_num: int, total_chunks: int, compress: bool, **kwargs
+    ) -> Dict[str, str]:
         content_type = kwargs.get("content_type", "application/octet-stream")
-        if chunk_no > 1:
+        if chunk_num > 1:
             headers = {
                 "Content-Type": content_type,
-                "Mex-Chunk-Range": f"{chunk_no}:{total_chunks}",
+                "Mex-Chunk-Range": f"{chunk_num}:{total_chunks}",
             }
             if compress:
                 headers["Content-Encoding"] = "gzip"
@@ -571,7 +585,7 @@ class MeshClient:
 
         headers = {
             "Content-Type": content_type,
-            "Mex-Chunk-Range": f"{chunk_no}:{total_chunks}",
+            "Mex-Chunk-Range": f"{chunk_num}:{total_chunks}",
             "Mex-To": recipient,
         }
 
@@ -593,7 +607,7 @@ class MeshClient:
         self,
         recipient: str,
         chunk,
-        chunk_no: int,
+        chunk_num: int,
         total_chunks: int,
         compress: Optional[bool] = None,
         message_id: Optional[str] = None,
@@ -604,17 +618,17 @@ class MeshClient:
         Args:
             recipient (str): mailbox id to send to
             chunk: data to send
-            chunk_no: chunk number >= 1
+            chunk_num: chunk number >= 1
             total_chunks: total number of chunks >= 1
             compress: instruction to compress this (overrides the 'transparent_compress' at the mailbox level)
-            message_id: message id, required if chunk_no > 1
+            message_id: message id, required if chunk_num > 1
             **kwargs: optional mesh header args workflow_id, filename, local_id, subject, encrypted,
                         compressed, checksum, partner_id, content_type
 
         Returns:
             Response: raw http response
         """
-
+        chunk_num = int(chunk_num)
         compress = self._transparent_compress if compress is None else compress
 
         def maybe_compressed(maybe_compress: bytes):
@@ -622,18 +636,18 @@ class MeshClient:
                 return maybe_compress
             return GzipCompressStream(maybe_compress)
 
-        headers = self._headers(
-            recipient=recipient, chunk_no=chunk_no, total_chunks=total_chunks, compress=compress, **kwargs
+        headers = self._headers_for_chunk(
+            recipient=recipient, chunk_num=chunk_num, total_chunks=total_chunks, compress=compress, **kwargs
         )
 
         data = maybe_compressed(chunk)
 
         buffer = data
-        if chunk_no > 1 and self._retries:
+        if chunk_num > 1 and self._retries:
             # urllib3 body_pos requires a seekable stream to allow rewinding on retry ( we never retry the first chunk )
             buffer = BytesIO(data.read() if hasattr(data, "read") else data)
 
-        if chunk_no == 1:
+        if chunk_num == 1:
             assert not message_id, "message_id should not be sent with the first chunk"
 
             response = self._session.post(
@@ -651,7 +665,7 @@ class MeshClient:
         assert message_id, "message_id is required for chunks number >= 2"
 
         response = self._session.post(
-            f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_no}",
+            f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_num}",
             data=buffer,
             headers=headers,
             timeout=self._timeout,
@@ -715,7 +729,7 @@ class MeshClient:
         total_chunks = len(chunks)
 
         response1 = self.send_chunk(
-            recipient=recipient, chunk=first_chunk, chunk_no=1, total_chunks=total_chunks, compress=compress, **kwargs
+            recipient=recipient, chunk=first_chunk, chunk_num=1, total_chunks=total_chunks, compress=compress, **kwargs
         )
 
         response_dict = response1.json()
@@ -734,7 +748,7 @@ class MeshClient:
             _response = self.send_chunk(
                 recipient=recipient,
                 chunk=chunk,
-                chunk_no=chunk_num,
+                chunk_num=chunk_num,
                 message_id=message_id,
                 total_chunks=total_chunks,
                 compress=compress,
@@ -937,10 +951,10 @@ class _BaseMessage:
         def maybe_decompress(resp):
             return GzipDecompressStream(resp.raw) if resp.headers.get("Content-Encoding") == "gzip" else resp.raw
 
-        self._response = CombineStreams(
+        self._stream = CombineStreams(
             chain(
                 [maybe_decompress(response)],
-                (maybe_decompress(client.retrieve_message_chunk(msg_id, str(i + 2))) for i in range(chunk_count - 1)),
+                (maybe_decompress(client.retrieve_message_chunk(msg_id, i + 2)) for i in range(chunk_count - 1)),
             )
         )
 
@@ -957,27 +971,27 @@ class _BaseMessage:
         Read up to n bytes from the message, or read the remainder of the
         message, if n is not provided.
         """
-        return self._response.read(n)
+        return self._stream.read(n)
 
     def readline(self) -> bytes:
         """
         Read a single line from the message
         """
-        return self._response.readline()
+        return self._stream.readline()
 
     def readlines(self) -> List[bytes]:
         """
         Read all lines from the message
         """
-        return self._response.readlines()
+        return self._stream.readlines()
 
     def close(self):
         """Close the stream underlying this message"""
-        if hasattr(self._response, "close"):
+        if hasattr(self._stream, "close"):
             try:
-                self._response.close()
+                self._stream.close()
             finally:
-                self._response = None  # type: ignore[assignment]
+                self._stream = None  # type: ignore[assignment]
 
     def acknowledge(self):
         """
@@ -1014,7 +1028,7 @@ class _BaseMessage:
         """
         Iterate through lines of the message
         """
-        return iter(self._response)
+        return iter(self._stream)
 
 
 class Message(_BaseMessage, _MessageAttrs):

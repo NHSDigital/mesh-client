@@ -90,7 +90,7 @@ _SEND_HEADERS.update(
     {
         "workflowid": "Mex-WorkflowID",
         "file_name": "Mex-FileName",
-        "local_id": "Mex-LocalID",
+        "localid": "Mex-LocalID",
         "content_encrypted": "Mex-Content-Encrypted",
         "content_compressed": "Mex-Content-Compressed",
         "content_checksum": "Mex-Content-Checksum",
@@ -579,7 +579,7 @@ class MeshClient:
             if key in _SEND_HEADERS:
                 if key in _BOOLEAN_HEADERS:
                     value = "Y" if value else "N"
-                headers[_OPTIONAL_HEADERS[key]] = str(value)
+                headers[_SEND_HEADERS[key]] = str(value)
             else:
                 optional_args = ", ".join(["recipient", "data", *list(_OPTIONAL_HEADERS.keys())])
                 raise TypeError(f"Unrecognised keyword argument '{key}'.  optional arguments are: {optional_args}")

@@ -191,9 +191,7 @@ def test_readlines(alice: MeshClient, bob: MeshClient):
 
 def test_transparent_compression(alice: MeshClient, bob: MeshClient):
     print("Sending")
-    message_id = alice.send_message(
-        bob_mailbox, b"Hello Bob Compressed", workflow_id=uuid4().hex, transparent_compress=True
-    )
+    message_id = alice.send_message(bob_mailbox, b"Hello Bob Compressed", workflow_id=uuid4().hex, compress=True)
     assert bob.list_messages() == [message_id]
     print("Receiving")
     msg = bob.retrieve_message(message_id)
@@ -234,7 +232,7 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
         subject="Hello World",
         filename="upload.txt",
         local_id="12345",
-        message_type="DATA",
+        partner_id="test",
         workflow_id="111",
         encrypted=False,
         compressed=False,
@@ -245,7 +243,7 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
         assert msg.filename == "upload.txt"
         assert msg.local_id == "12345"
         assert msg.message_type == "DATA"
-        assert msg.workflow_id == "111"
+        assert msg.partner_id == "test"
         assert msg.encrypted is False
 
     message_id = alice.send_message(

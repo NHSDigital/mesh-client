@@ -4,6 +4,13 @@ Release Notes
 These are not all encompassing, but we will try and capture noteable differences here.
 
 ----
+# 3.1
+* expose a `send_chunk` method which will return the bare http response, but will still take care of some of the messier header negotiation
+* support for alternative names for optional send headers
+* removed `mex-MessageType` as a send header, it's not required
+* removed `mex-From` as sender header, it's not required
+* support for setting `compress` for an individual message (rather than just using the 'transparent_compress' init arg)
+
 # 3.0
 ### v3.0 release includes some significant changes, attempting to capture major differences here
 

@@ -77,22 +77,34 @@ _OPTIONAL_HEADERS = {
     "workflow_id": "Mex-WorkflowID",
     "filename": "Mex-FileName",
     "local_id": "Mex-LocalID",
-    "message_type": "Mex-MessageType",
     "subject": "Mex-Subject",
     "encrypted": "Mex-Content-Encrypted",
     "compressed": "Mex-Content-Compressed",
     "checksum": "Mex-Content-Checksum",
+    "partner_id": "Mex-PartnerID",
     "content_type": "Content-Type",
 }
 
-_BOOLEAN_HEADERS = {"compressed", "encrypted"}
+_SEND_HEADERS = {**_OPTIONAL_HEADERS}
+_SEND_HEADERS.update(
+    {
+        "workflowid": "Mex-WorkflowID",
+        "file_name": "Mex-FileName",
+        "local_id": "Mex-LocalID",
+        "content_encrypted": "Mex-Content-Encrypted",
+        "content_compressed": "Mex-Content-Compressed",
+        "content_checksum": "Mex-Content-Checksum",
+        "partnerid": "Mex-PartnerID",
+    }
+)
+
+_BOOLEAN_HEADERS = {"compressed", "encrypted", "content_compressed", "content_encrypted"}
 
 _RECEIVE_HEADERS = {
     "sender": "Mex-From",
     "recipient": "Mex-To",
     "message_id": "Mex-MessageID",
-    "version": "Mex-Version",
-    "partner_id": "Mex-PartnerID",
+    "message_type": "Mex-MessageType",
 }
 _RECEIVE_HEADERS.update(_OPTIONAL_HEADERS)
 
@@ -545,12 +557,119 @@ class MeshClient:
         response.raise_for_status()
         return response
 
-    def send_message(  # noqa: C901
+    @staticmethod
+    def _headers(recipient: str, chunk_no: int, total_chunks: int, compress: bool, **kwargs) -> Dict[str, str]:
+        content_type = kwargs.get("content_type", "application/octet-stream")
+        if chunk_no > 1:
+            headers = {
+                "Content-Type": content_type,
+                "Mex-Chunk-Range": f"{chunk_no}:{total_chunks}",
+            }
+            if compress:
+                headers["Content-Encoding"] = "gzip"
+            return headers
+
+        headers = {
+            "Content-Type": content_type,
+            "Mex-Chunk-Range": f"{chunk_no}:{total_chunks}",
+            "Mex-To": recipient,
+        }
+
+        for key, value in kwargs.items():
+            if key in _SEND_HEADERS:
+                if key in _BOOLEAN_HEADERS:
+                    value = "Y" if value else "N"
+                headers[_OPTIONAL_HEADERS[key]] = str(value)
+            else:
+                optional_args = ", ".join(["recipient", "data", *list(_OPTIONAL_HEADERS.keys())])
+                raise TypeError(f"Unrecognised keyword argument '{key}'.  optional arguments are: {optional_args}")
+
+        if compress:
+            headers["Content-Encoding"] = "gzip"
+
+        return headers
+
+    def send_chunk(
+        self,
+        recipient: str,
+        chunk,
+        chunk_no: int,
+        total_chunks: int,
+        compress: Optional[bool] = None,
+        message_id: Optional[str] = None,
+        **kwargs,
+    ) -> Response:
+        """
+            base send chunk used for both the initial message and subsequent chunks
+        Args:
+            recipient (str): mailbox id to send to
+            chunk: data to send
+            chunk_no: chunk number >= 1
+            total_chunks: total number of chunks >= 1
+            compress: instruction to compress this (overrides the 'transparent_compress' at the mailbox level)
+            message_id: message id, required if chunk_no > 1
+            **kwargs: optional mesh header args workflow_id, filename, local_id, subject, encrypted,
+                        compressed, checksum, partner_id, content_type
+
+        Returns:
+            Response: raw http response
+        """
+
+        compress = self._transparent_compress if compress is None else compress
+
+        def maybe_compressed(maybe_compress: bytes):
+            if not compress:
+                return maybe_compress
+            return GzipCompressStream(maybe_compress)
+
+        headers = self._headers(
+            recipient=recipient, chunk_no=chunk_no, total_chunks=total_chunks, compress=compress, **kwargs
+        )
+
+        data = maybe_compressed(chunk)
+
+        buffer = data
+        if chunk_no > 1 and self._retries:
+            # urllib3 body_pos requires a seekable stream to allow rewinding on retry ( we never retry the first chunk )
+            buffer = BytesIO(data.read() if hasattr(data, "read") else data)
+
+        if chunk_no == 1:
+            assert not message_id, "message_id should not be sent with the first chunk"
+
+            response = self._session.post(
+                f"{self.mailbox_url}/outbox",
+                data=buffer,
+                headers=headers,
+                timeout=self._timeout,
+            )
+            # MESH server dumps XML SOAP output on internal server error
+            if response.status_code >= 500:
+                response.raise_for_status()
+
+            return response
+
+        assert message_id, "message_id is required for chunks number >= 2"
+
+        response = self._session.post(
+            f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_no}",
+            data=buffer,
+            headers=headers,
+            timeout=self._timeout,
+        )
+
+        # check other successful response codes
+        if response.status_code in (200, 202):
+            return response
+
+        response.raise_for_status()
+        return response
+
+    def send_message(
         self,
         recipient: str,
         data,
         max_chunk_size: Optional[int] = None,
-        transparent_compress: Optional[bool] = None,
+        compress: Optional[bool] = None,
         **kwargs,
     ) -> str:
         """
@@ -566,65 +685,38 @@ class MeshClient:
         workflow_id
         filename
         local_id
-        message_type
         subject
         encrypted
         compressed
         checksum
-        sender
         recipient
-        message_id
-        version
         partner_id
 
-        Note that compressed refers to *non-transparent* compression - the
-        client will not attempt to compress or decompress data. Transparent
-        compression for sending is enabled as a constructor option.
+        Args:
+            recipient: mailbox id to send to
+            data: data / file / stream to send
+            max_chunk_size: max chunk size to apply to the data stream
+            compress: instruction to compress this (overrides the 'transparent_compress' at the mailbox level)
+            **kwargs: optional mesh header args workflow_id, filename, local_id, subject, encrypted,
+                        compressed, checksum, partner_id, content_type
+
+        Returns:
+            Response: raw http response
         """
-        transparent_compress = self._transparent_compress if transparent_compress is None else transparent_compress
 
-        def maybe_compressed(maybe_compress: bytes):
-            if not transparent_compress:
-                return maybe_compress
-            return GzipCompressStream(maybe_compress)
-
-        headers = {
-            "Mex-From": self._mailbox,
-            "Mex-To": recipient,
-            "Mex-MessageType": "DATA",
-            "Mex-Version": "1.0",
-            "Content-Type": "application/octet-stream",
-        }
-
-        for key, value in kwargs.items():
-            if key in _OPTIONAL_HEADERS:
-                if key in _BOOLEAN_HEADERS:
-                    value = "Y" if value else "N"
-                headers[_OPTIONAL_HEADERS[key]] = str(value)
-            else:
-                optional_args = ", ".join(["recipient", "data", *list(_OPTIONAL_HEADERS.keys())])
-                raise TypeError(f"Unrecognised keyword argument '{key}'.  optional arguments are: {optional_args}")
-
-        if transparent_compress:
-            headers["Content-Encoding"] = "gzip"
+        compress = self._transparent_compress if compress is None else compress
 
         max_chunk_size = max_chunk_size or self._max_chunk_size
         chunks = SplitStream(data, max_chunk_size)
-        headers["Mex-Chunk-Range"] = f"1:{len(chunks)}"
 
         chunk_iterator = iter(chunks)
 
-        first_chunk = maybe_compressed(next(chunk_iterator))
+        first_chunk = next(chunk_iterator)
+        total_chunks = len(chunks)
 
-        response1 = self._session.post(
-            f"{self.mailbox_url}/outbox",
-            data=first_chunk,
-            headers=headers,
-            timeout=self._timeout,
+        response1 = self.send_chunk(
+            recipient=recipient, chunk=first_chunk, chunk_no=1, total_chunks=total_chunks, compress=compress, **kwargs
         )
-        # MESH server dumps XML SOAP output on internal server error
-        if response1.status_code >= 500:
-            response1.raise_for_status()
 
         response_dict = response1.json()
         if _looks_like_send_error(response1.status_code, response_dict):
@@ -639,33 +731,15 @@ class MeshClient:
         message_id = success_response["message_id"]
 
         for chunk_num, chunk in enumerate(chunk_iterator, start=2):
-            data = maybe_compressed(chunk)
-
-            buffer = data
-            if self._retries:
-                # urllib3 body_pos requires a seekable stream to allow rewinding on retry
-                buffer = BytesIO(data.read() if hasattr(data, "read") else data)
-
-            headers = {
-                "Content-Type": "application/octet-stream",
-                "Mex-Chunk-Range": f"{chunk_num}:{len(chunks)}",
-                "Mex-From": self._mailbox,
-            }
-            if transparent_compress:
-                headers["Content-Encoding"] = "gzip"
-
-            response = self._session.post(
-                f"{self.mailbox_url}/outbox/{q(message_id)}/{chunk_num}",
-                data=buffer,
-                headers=headers,
-                timeout=self._timeout,
+            _response = self.send_chunk(
+                recipient=recipient,
+                chunk=chunk,
+                chunk_no=chunk_num,
+                message_id=message_id,
+                total_chunks=total_chunks,
+                compress=compress,
+                **kwargs,
             )
-
-            # check other successful response codes
-            if response.status_code in (200, 202):
-                continue
-
-            response.raise_for_status()
 
         return message_id
 

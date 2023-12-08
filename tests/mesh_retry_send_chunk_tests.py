@@ -112,14 +112,14 @@ def test_chunk_retries(httpserver: HTTPServer, alice: MeshClient, bob: MeshClien
     def send_chunk_handler(request: Request):
         last_path = request.path.split("/")[-1]
 
-        chunk_no = int(last_path) if last_path.isdigit() else 1
-        chunk_call_counts[chunk_no] += 1
+        chunk_num = int(last_path) if last_path.isdigit() else 1
+        chunk_call_counts[chunk_num] += 1
 
-        if chunk_no == 1:
+        if chunk_num == 1:
             received_chunks.append(request.data)
             return json_response(cast(SendMessageResponse_v2, {"message_id": message_id}), status=202)
 
-        if chunk_no == 2 and chunk_call_counts[chunk_no] < 4:
+        if chunk_num == 2 and chunk_call_counts[chunk_num] < 4:
             return plain_response("", status=502)
 
         received_chunks.append(request.data)
@@ -168,8 +168,8 @@ def test_chunk_all_retries_fail(httpserver: HTTPServer, alice: MeshClient, bob: 
 
     def send_chunk_handler(request: Request):
         last_path = request.path.split("/")[-1]
-        chunk_no = int(last_path) if last_path.isdigit() else 1
-        chunk_call_counts[chunk_no] += 1
+        chunk_num = int(last_path) if last_path.isdigit() else 1
+        chunk_call_counts[chunk_num] += 1
         return plain_response("", status=502)
 
     httpserver.expect_request(send_re, method="POST").respond_with_handler(send_chunk_handler)
@@ -194,8 +194,8 @@ def test_chunk_first_chunk_fails(httpserver: HTTPServer, alice: MeshClient, bob:
     def send_chunk_handler(request: Request):
         last_path = request.path.split("/")[-1]
 
-        chunk_no = int(last_path) if last_path.isdigit() else 1
-        chunk_call_counts[chunk_no] += 1
+        chunk_num = int(last_path) if last_path.isdigit() else 1
+        chunk_call_counts[chunk_num] += 1
 
         return plain_response("", status=502)
 
@@ -225,14 +225,14 @@ def test_chunk_retries_with_file(httpserver: HTTPServer, alice: MeshClient, bob:
     def send_chunk_handler(request: Request):
         last_path = request.path.split("/")[-1]
 
-        chunk_no = int(last_path) if last_path.isdigit() else 1
-        chunk_call_counts[chunk_no] += 1
+        chunk_num = int(last_path) if last_path.isdigit() else 1
+        chunk_call_counts[chunk_num] += 1
 
-        if chunk_no == 1:
+        if chunk_num == 1:
             received_chunks.append(request.data)
             return json_response(cast(SendMessageResponse_v2, {"message_id": message_id}), status=202)
 
-        if chunk_no == 2 and chunk_call_counts[chunk_no] < 4:
+        if chunk_num == 2 and chunk_call_counts[chunk_num] < 4:
             return plain_response("", status=502)
 
         received_chunks.append(request.data)

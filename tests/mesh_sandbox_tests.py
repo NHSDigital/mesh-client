@@ -225,7 +225,32 @@ def test_context_manager_failure(alice: MeshClient, bob: MeshClient):
     assert bob.list_messages() == [message_id]
 
 
-def test_optional_args(alice: MeshClient, bob: MeshClient):
+def test_optional_args_single_chunk(alice: MeshClient, bob: MeshClient):
+    message_id = alice.send_message(
+        bob_mailbox,
+        b"Hi",
+        subject="Hello World",
+        filename="upload.txt",
+        local_id="12345",
+        partner_id="test",
+        workflow_id="111",
+        encrypted=False,
+        compressed=False,
+        content_type="text/plain",
+    )
+
+    with bob.retrieve_message(message_id) as msg:
+        assert msg.subject == "Hello World"
+        assert msg.filename == "upload.txt"
+        assert msg.local_id == "12345"
+        assert msg.message_type == "DATA"
+        assert msg.partner_id == "test"
+        assert msg.encrypted is False
+        assert msg.content_type == "text/plain"
+        assert msg.mex_header("total-chunks") == "1"
+
+
+def test_optional_args_multi_chunk(alice: MeshClient, bob: MeshClient):
     message_id = alice.send_message(
         bob_mailbox,
         b"Hello Bob 5",
@@ -236,6 +261,7 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
         workflow_id="111",
         encrypted=False,
         compressed=False,
+        content_type="text/plain",
     )
 
     with bob.retrieve_message(message_id) as msg:
@@ -245,6 +271,8 @@ def test_optional_args(alice: MeshClient, bob: MeshClient):
         assert msg.message_type == "DATA"
         assert msg.partner_id == "test"
         assert msg.encrypted is False
+        assert msg.content_type == "text/plain"
+        assert msg.mex_header("total-chunks") == "3"
 
     message_id = alice.send_message(
         bob_mailbox, b"Hello Bob 5", encrypted=True, compressed=True, workflow_id=uuid4().hex

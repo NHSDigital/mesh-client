@@ -4,7 +4,7 @@ services:
 
   mesh_sandbox:
     build:
-      context: https://github.com/NHSDigital/mesh-sandbox.git#refs/tags/v1.0.4
+      context: https://github.com/NHSDigital/mesh-sandbox.git#refs/tags/v1.0.13
     ports:
       - "8701:443"
     deploy:

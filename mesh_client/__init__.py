@@ -72,6 +72,8 @@ INT_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-int-ca-bundle.pem")
 DEP_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-dep-ca-bundle.pem")
 LIVE_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-live-ca-bundle.pem")
 
+DEFAULT_MEDIA_TYPE = "application/octet-stream"
+
 
 _OPTIONAL_HEADERS: Dict[str, str] = {
     "workflow_id": "Mex-WorkflowID",
@@ -82,7 +84,7 @@ _OPTIONAL_HEADERS: Dict[str, str] = {
     "compressed": "Mex-Content-Compressed",
     "checksum": "Mex-Content-Checksum",
     "partner_id": "Mex-PartnerID",
-    "content_type": "Content-Type",
+    "content_type": "Mex-Content-Type",
 }
 
 
@@ -573,18 +575,22 @@ class MeshClient:
     def _headers_for_chunk(
         recipient: str, chunk_num: int, total_chunks: int, compress: bool, **kwargs
     ) -> Dict[str, str]:
-        content_type = kwargs.get("content_type", "application/octet-stream")
         if chunk_num > 1:
             headers = {
-                "Content-Type": content_type,
+                "Content-Type": DEFAULT_MEDIA_TYPE,
                 "Mex-Chunk-Range": f"{chunk_num}:{total_chunks}",
             }
             if compress:
                 headers["Content-Encoding"] = "gzip"
             return headers
 
+        content_type = kwargs.get("content_type")
+        media_type = DEFAULT_MEDIA_TYPE
+        if content_type and total_chunks == 1:
+            media_type = content_type
+
         headers = {
-            "Content-Type": content_type,
+            "Content-Type": media_type,
             "Mex-Chunk-Range": f"{chunk_num}:{total_chunks}",
             "Mex-To": recipient,
         }
@@ -597,6 +603,10 @@ class MeshClient:
             else:
                 optional_args = ", ".join(["recipient", "data", *list(_OPTIONAL_HEADERS.keys())])
                 raise TypeError(f"Unrecognised keyword argument '{key}'.  optional arguments are: {optional_args}")
+
+        if headers["Content-Type"] == headers.get("Mex-Content-Type"):
+            # don't send both if they're the same
+            headers.pop("Mex-Content-Type")
 
         if compress:
             headers["Content-Encoding"] = "gzip"
@@ -705,6 +715,7 @@ class MeshClient:
         checksum
         recipient
         partner_id
+        content_type
 
         Args:
             recipient: mailbox id to send to
@@ -935,6 +946,7 @@ class _BaseMessage:
         self._mex_headers: Dict[str, Any] = {}
 
         headers = response.headers
+
         for header, header_value in headers.items():
             lkey = header.lower()
             if lkey.startswith("mex-"):
@@ -945,8 +957,13 @@ class _BaseMessage:
             if attribute in _BOOLEAN_HEADERS:
                 header_value = header_value or "N"
                 header_value = header_value.upper() in ["Y", "TRUE"]
+
             setattr(self, attribute, header_value)
         chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
+
+        if not hasattr(self, "content_type") or not self.content_type:  # type: ignore[has-type]
+            # try and get content_type from Mex-Content-Type first, but fallback to request content type if not set
+            setattr(self, "content_type", headers.get("Content-Type"))  # noqa: B010
 
         def maybe_decompress(resp):
             return GzipDecompressStream(resp.raw) if resp.headers.get("Content-Encoding") == "gzip" else resp.raw

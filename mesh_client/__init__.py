@@ -975,7 +975,7 @@ class _BaseMessage:
             )
         )
 
-    def id(self) -> str:  # noqa: A003
+    def id(self) -> str:
         """return the message id
 
         Returns:

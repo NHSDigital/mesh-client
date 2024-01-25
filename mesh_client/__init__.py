@@ -125,7 +125,7 @@ DEPRECATED_HSCN_INT_ENDPOINT = Endpoint("https://msg.int.spine2.ncrs.nhs.uk", IN
 DEPRECATED_HSCN_LIVE_ENDPOINT = Endpoint("https://mesh-sync.national.ncrs.nhs.uk", LIVE_CA_CERT, None, True, True)
 DEP_ENDPOINT = Endpoint("https://msg.depspineservices.nhs.uk", DEP_CA_CERT, None, True, False)
 INT_ENDPOINT = Endpoint("https://msg.intspineservices.nhs.uk", INT_CA_CERT, None, True, False)
-LIVE_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", LIVE_CA_CERT, None, True, True)
+LIVE_ENDPOINT = Endpoint("https://mesh-sync.spineservices.nhs.uk", LIVE_CA_CERT, None, True, False)
 
 ENDPOINTS = [(name, endpoint) for name, endpoint in locals().items() if name.endswith("_ENDPOINT")]
 

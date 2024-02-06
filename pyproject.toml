@@ -46,7 +46,7 @@ coverage = "^7.2.7"
 pytest = "^7.4.0"
 importlib-metadata = {version = ">=4.11.4", python = "<3.12"}
 pytest-httpserver = {version = "^1.0.8", python = ">=3.8,<4.0"}
-ruff = "^0.1.5"
+ruff = "^0.2.0"
 boto3 = "^1.33.7"
 
 [tool.poetry.group.local.dependencies]
@@ -54,7 +54,7 @@ ipython = {version = "^8.14.0", python = ">=3.9,<4.0"}
 
 
 [tool.ruff]
-select = [
+lint.select = [
     # See https://beta.ruff.rs/docs/rules/ for a full list
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
@@ -78,14 +78,14 @@ select = [
     "SIM", # flake8-simplify
 ]
 src = ["."]
-ignore = [
+lint.ignore = [
     "PT004"
 ]
 exclude = [
     ".git",
     ".venv",
 ]
-unfixable = ["SIM112"]
+lint.unfixable = ["SIM112"]
 line-length = 120
 target-version = "py37"
 

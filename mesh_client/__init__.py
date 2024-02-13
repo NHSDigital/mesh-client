@@ -532,7 +532,7 @@ class MeshClient:
         if workflow_filter:
             params["workflow_filter"] = workflow_filter
 
-        result = self._inbox_v2_page(f"{self.mailbox_url}/inbox", params=params)
+        result = self._inbox_v2_page(params=params)
 
         return cast(List[str], result.get("messages", []))
 
@@ -813,7 +813,7 @@ class MeshClient:
         next_page, messages = _next_messages(result)
         yield from messages
         while next_page:
-            result = self._inbox_v2_page(url=next_page)
+            result = self._inbox_v2_page(f"{self._url}{next_page}")
             next_page, messages = _next_messages(result)
             yield from messages
 

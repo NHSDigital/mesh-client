@@ -46,7 +46,7 @@ coverage = "^7.2.7"
 pytest = "^7.4.0"
 importlib-metadata = {version = ">=4.11.4", python = "<3.12"}
 pytest-httpserver = {version = "^1.0.8", python = ">=3.8,<4.0"}
-ruff = "^0.2.0"
+ruff = "^0"
 boto3 = "^1.33.7"
 
 [tool.poetry.group.local.dependencies]

@@ -96,6 +96,12 @@ def test_send_receive(alice: MeshClient, bob: MeshClient):
     assert bob.list_messages() == []
 
 
+def test_iteration_pages(alice: MeshClient, bob: MeshClient):
+    sent_message_ids = {alice.send_message(bob_mailbox, b"Hello Bob 1", workflow_id=uuid4().hex) for _ in range(25)}
+    captured_message_ids = set(bob.iterate_message_ids(batch_size=10))
+    assert sent_message_ids == captured_message_ids
+
+
 def test_send_receive_combine_streams_part1_multiple_of_chunk_size(alice: MeshClient, bob: MeshClient):
     part1_length = 10
     part2_length = 23

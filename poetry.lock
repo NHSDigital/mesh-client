@@ -893,13 +893,13 @@ testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "no
 
 [[package]]
 name = "pytest-httpserver"
-version = "1.0.8"
+version = "1.0.9"
 description = "pytest-httpserver is a httpserver for pytest"
 optional = false
-python-versions = ">=3.8,<4.0"
+python-versions = ">=3.8"
 files = [
-    {file = "pytest_httpserver-1.0.8-py3-none-any.whl", hash = "sha256:24cd3d9f6a0b927c7bfc400d0b3fda7442721b8267ce29942bf307b190f0bb09"},
-    {file = "pytest_httpserver-1.0.8.tar.gz", hash = "sha256:e052f69bc8a9073db02484681e8e47004dd1fb3763b0ae833bd899e5895c559a"},
+    {file = "pytest_httpserver-1.0.9-py3-none-any.whl", hash = "sha256:5c84c372564b627521784909b8c8b45c5ededbae2406f7624e201dd86ae0610a"},
+    {file = "pytest_httpserver-1.0.9.tar.gz", hash = "sha256:9429f26c7ad7b1677dc2fa3bc9e928601f0e9b4ba0388edf961162be1242a662"},
 ]
 
 [package.dependencies]
@@ -1312,4 +1312,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.7"
-content-hash = "61bd003f1d9cf75905567bfbacfa08664ce0a23d8fb60a305c0857f77827e96d"
+content-hash = "189b0dd8349c2d9454a2e39f3600305bdfcedc6d5c8a965088c3a7d30dfbf55f"

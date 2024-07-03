@@ -50,7 +50,7 @@ jobs:
 
       - name: code coverage report
         if: ${{ github.event_name == 'pull_request' }}
-        uses: orgoro/coverage@32a2af98e56f47d958cf4c64b1f5e02161f2853e
+        uses: orgoro/coverage@c65003f41276ea33fe3a3a5d53df8b340462e8fa
         with:
           coverageFile: reports/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}

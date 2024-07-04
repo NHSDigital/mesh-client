@@ -26,13 +26,14 @@ classifiers = [
 
 [tool.poetry.dependencies]
 # core dependencies
-python = ">=3.7"
+python = ">=3.8"
 requests = ">=2.26.0"
 urllib3 = ">=1.25.4"
+werkzeug = "^3.0.3"
 
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.3.0"
+black = "^24.4.2"
 mypy = "^1.4.1"
 types-six = "^1.16.21.8"
 types-requests = "^2.31.0.1"

@@ -33,8 +33,7 @@ def format_installs_required(config):
         append_str = f"{k} ({v})"
         if is_list_of_dicts(v):
             for package_version in v:
-                if ("version" in package_version and
-                        "markers" in package_version):
+                if "version" in package_version and "markers" in package_version:
                     version = package_version.get("version")
                     markers = package_version.get("markers")
                     append_str = f"{k}{version} ; {markers}"

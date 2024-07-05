@@ -19,6 +19,34 @@ with open(join(dirname(__file__), poetry_cfg["readme"])) as f:
     long_description = f.read()
 
 
+def is_list_of_dicts_with_keys(value, keys):
+    if isinstance(value, list):
+        if all(isinstance(item, dict) and all(key in item for key in keys) for item in value):
+            return True
+        raise ValueError(
+            "Dependency of type list must contain dictionaries "
+            f"with keys {keys}."
+            " See CONTRIBUTING.md for formatting"
+        )
+    return False
+
+
+def format_installs_required(config):
+    dependencies = []
+    for k, v in config.items():
+        if k == "python":
+            continue
+        elif is_list_of_dicts_with_keys(v, ["version", "markers"]):
+            for package_version in v:
+                version = package_version.get("version")
+                markers = package_version.get("markers")
+                dependencies.append(f"{k}{version} ; {markers}")
+        else:
+            dependencies.append(f"{k} ({v})")
+
+    return dependencies
+
+
 setup(
     name=poetry_cfg["name"],
     version=sic(os.environ.get("RELEASE_VERSION", poetry_cfg["version"])),
@@ -29,7 +57,7 @@ setup(
     author=poetry_cfg["authors"][0],
     packages=["mesh_client"],
     package_data={"mesh_client": ["py.typed", "*.pem"]},
-    install_requires=[f"{k} ({v})" for k, v in poetry_cfg["dependencies"].items() if k != "python"],
+    install_requires=format_installs_required(poetry_cfg["dependencies"]),
     entry_points={
         "console_scripts": ["mesh_auth=mesh_client.mesh_auth:main", "mock_mesh_server=mesh_client.mock_server:main"]
     },

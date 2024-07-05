@@ -255,7 +255,7 @@ def test_split_combine_stream_misaligned_with_chunk_size_2():
 def test_split_combine_stream_misaligned_with_chunk_size_3():
     instance = SplitStream(
         {
-            "Body": CombineStreams([io.BytesIO(b"123"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
+            "Body": CombineStreams([io.BytesIO(b"abc"), io.BytesIO(b"456"), io.BytesIO(b"789"), io.BytesIO(b"012")]),
             "ContentLength": 12,
         },
         5,
@@ -263,7 +263,7 @@ def test_split_combine_stream_misaligned_with_chunk_size_3():
     assert len(instance) == 3
     iterator = iter(instance)
     chunk1 = next(iterator)
-    assert chunk1.read(5) == b"12345"
+    assert chunk1.read(5) == b"abc45"
     chunk2 = next(iterator)
     assert chunk2.read(5) == b"67890"
     chunk3 = next(iterator)

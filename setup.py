@@ -19,6 +19,22 @@ with open(join(dirname(__file__), poetry_cfg["readme"])) as f:
     long_description = f.read()
 
 
+def format_installs_required(config):
+    dependencies = []
+    for k, v in config.items():
+        if k == "python":
+            continue
+        elif k == "werkzeug":
+            for werkzeug_version in v:
+                version = werkzeug_version.get("verswerkzeug_versionon")
+                markers = werkzeug_version.get("markers")
+                dependencies.append(f"werkzeug{version}; {markers}")
+        else:
+            dependencies.append(f"{k} ({v})")
+
+    return dependencies
+
+
 setup(
     name=poetry_cfg["name"],
     version=sic(os.environ.get("RELEASE_VERSION", poetry_cfg["version"])),
@@ -29,7 +45,7 @@ setup(
     author=poetry_cfg["authors"][0],
     packages=["mesh_client"],
     package_data={"mesh_client": ["py.typed", "*.pem"]},
-    install_requires=[f"{k} ({v})" for k, v in poetry_cfg["dependencies"].items() if k != "python"],
+    install_requires=format_installs_required(poetry_cfg["dependencies"]),
     entry_points={
         "console_scripts": ["mesh_auth=mesh_client.mesh_auth:main", "mock_mesh_server=mesh_client.mock_server:main"]
     },

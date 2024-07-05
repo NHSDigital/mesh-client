@@ -29,7 +29,10 @@ classifiers = [
 python = ">=3.8"
 requests = ">=2.26.0"
 urllib3 = ">=1.25.4"
-werkzeug = "^3.0.3"
+werkzeug = [
+    { version = "^3.0.3", python = ">=3.10,>=3.9,>=3.8,>=3.11" },
+    { version = "^3.0.1", python = ">=3.7" }
+]
 
 
 [tool.poetry.group.dev.dependencies]

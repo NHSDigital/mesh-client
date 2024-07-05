@@ -98,8 +98,8 @@ files = [
 jmespath = ">=0.7.1,<2.0.0"
 python-dateutil = ">=2.1,<3.0.0"
 urllib3 = [
-    {version = ">=1.25.4,<2.1", markers = "python_version >= \"3.10\""},
     {version = ">=1.25.4,<1.27", markers = "python_version < \"3.10\""},
+    {version = ">=1.25.4,<2.1", markers = "python_version >= \"3.10\""},
 ]
 
 [package.extras]
@@ -1231,4 +1231,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8"
-content-hash = "9d9bf7df683f3d3f921500dd06c0f9a0af33254256975fa7d1e119cccaddbdbe"
+content-hash = "4894d11332eb2b5231120cc6600bcfabd6f2d186c211395570d47e10911298ce"

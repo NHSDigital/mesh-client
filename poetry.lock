@@ -1181,23 +1181,6 @@ files = [
 
 [[package]]
 name = "werkzeug"
-version = "3.0.1"
-description = "The comprehensive WSGI web application library."
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "werkzeug-3.0.1-py3-none-any.whl", hash = "sha256:90a285dc0e42ad56b34e696398b8122ee4c681833fb35b8334a095d82c56da10"},
-    {file = "werkzeug-3.0.1.tar.gz", hash = "sha256:507e811ecea72b18a404947aded4b3390e1db8f826b494d76550ef45bb3b1dcc"},
-]
-
-[package.dependencies]
-MarkupSafe = ">=2.1.1"
-
-[package.extras]
-watchdog = ["watchdog (>=2.3)"]
-
-[[package]]
-name = "werkzeug"
 version = "3.0.3"
 description = "The comprehensive WSGI web application library."
 optional = false
@@ -1231,4 +1214,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8"
-content-hash = "4894d11332eb2b5231120cc6600bcfabd6f2d186c211395570d47e10911298ce"
+content-hash = "a5e865e49dcd17ff5c77661c5cface2cd4af9cd7002dacc58f3d7e6cb94217f2"

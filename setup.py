@@ -24,11 +24,11 @@ def format_installs_required(config):
     for k, v in config.items():
         if k == "python":
             continue
-        elif k == "werkzeug":
+        elif k in ["werkzeug", "requests"]:
             for werkzeug_version in v:
                 version = werkzeug_version.get("version")
                 markers = werkzeug_version.get("markers")
-                dependencies.append(f"werkzeug{version}; {markers}")
+                dependencies.append(f"{k}{version}; {markers}")
         else:
             dependencies.append(f"{k} ({v})")
 

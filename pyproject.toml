@@ -27,12 +27,12 @@ classifiers = [
 [tool.poetry.dependencies]
 # core dependencies
 python = ">=3.7"
-requests = ">=2.26.0"
+requests = [{version = "<=2.26.0", markers = "python_version=='3.7'"},{version = ">=2.32.2", markers = "python_version>='3.8'"}]
 urllib3 = ">=1.25.4"
 werkzeug = [{version = "<=3.0.1", markers = "python_version=='3.7'"},{version = ">=3.0.3", markers = "python_version>='3.8'"}]
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.4.2"
+black = [{version = "<=23.3.0", markers = "python_version=='3.7'"},{version = ">=24.4.2", markers = "python_version>='3.8'"}]
 mypy = "^1.4.1"
 types-six = "^1.16.21.8"
 types-requests = "^2.31.0.1"

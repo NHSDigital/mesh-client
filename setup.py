@@ -19,12 +19,21 @@ with open(join(dirname(__file__), poetry_cfg["readme"])) as f:
     long_description = f.read()
 
 
+def is_list_of_dicts_with_keys(value, keys):
+    if isinstance(value, list):
+        return all(
+            isinstance(item, dict) and all(key in item for key in keys)
+            for item in value
+        )
+    return False
+
+
 def format_installs_required(config):
     dependencies = []
     for k, v in config.items():
         if k == "python":
             continue
-        elif all(("version" in val and "markers" in val) for val in v.values()):
+        elif is_list_of_dicts_with_keys(v, ["version", "markers"]):
             for package_version in v:
                 version = package_version.get("version")
                 markers = package_version.get("markers")

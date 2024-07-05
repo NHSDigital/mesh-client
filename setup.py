@@ -21,10 +21,7 @@ with open(join(dirname(__file__), poetry_cfg["readme"])) as f:
 
 def is_list_of_dicts_with_keys(value, keys):
     if isinstance(value, list):
-        return all(
-            isinstance(item, dict) and all(key in item for key in keys)
-            for item in value
-        )
+        return all(isinstance(item, dict) and all(key in item for key in keys) for item in value)
     return False
 
 

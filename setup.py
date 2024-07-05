@@ -9,8 +9,6 @@ from os.path import dirname, join
 import toml  # type: ignore[import]
 from setuptools import setup, sic  # type: ignore[import]
 
-from setup_utils import format_installs_required, is_list_of_dicts_with_keys
-
 with open(join(dirname(__file__), "pyproject.toml")) as f:
     pyproject = toml.loads(f.read())
 
@@ -19,6 +17,28 @@ poetry_cfg = pyproject["tool"]["poetry"]
 
 with open(join(dirname(__file__), poetry_cfg["readme"])) as f:
     long_description = f.read()
+
+
+def is_list_of_dicts_with_keys(value, keys):
+    if isinstance(value, list):
+        return all(isinstance(item, dict) and all(key in item for key in keys) for item in value)
+    return False
+
+
+def format_installs_required(config):
+    dependencies = []
+    for k, v in config.items():
+        if k == "python":
+            continue
+        elif is_list_of_dicts_with_keys(v, ["version", "markers"]):
+            for package_version in v:
+                version = package_version.get("version")
+                markers = package_version.get("markers")
+                dependencies.append(f"{k}{version} ; {markers}")
+        else:
+            dependencies.append(f"{k} ({v})")
+
+    return dependencies
 
 
 setup(

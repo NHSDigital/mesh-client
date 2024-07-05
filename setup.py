@@ -37,7 +37,7 @@ def format_installs_required(config):
             for package_version in v:
                 version = package_version.get("version")
                 markers = package_version.get("markers")
-                dependencies.append(f"{k}{version}; {markers}")
+                dependencies.append(f"{k}{version} ; {markers}")
         else:
             dependencies.append(f"{k} ({v})")
 

@@ -26,7 +26,7 @@ def format_installs_required(config):
             continue
         elif k == "werkzeug":
             for werkzeug_version in v:
-                version = werkzeug_version.get("verswerkzeug_versionon")
+                version = werkzeug_version.get("version")
                 markers = werkzeug_version.get("markers")
                 dependencies.append(f"werkzeug{version}; {markers}")
         else:

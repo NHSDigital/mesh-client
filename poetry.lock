@@ -953,13 +953,13 @@ testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "no
 
 [[package]]
 name = "pytest-httpserver"
-version = "1.0.9"
+version = "1.0.12"
 description = "pytest-httpserver is a httpserver for pytest"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "pytest_httpserver-1.0.9-py3-none-any.whl", hash = "sha256:5c84c372564b627521784909b8c8b45c5ededbae2406f7624e201dd86ae0610a"},
-    {file = "pytest_httpserver-1.0.9.tar.gz", hash = "sha256:9429f26c7ad7b1677dc2fa3bc9e928601f0e9b4ba0388edf961162be1242a662"},
+    {file = "pytest_httpserver-1.0.12-py3-none-any.whl", hash = "sha256:dae1c79ec7aeda83bfaaf4d0a400867a4b1bc6bf668244daaf13aa814e3022da"},
+    {file = "pytest_httpserver-1.0.12.tar.gz", hash = "sha256:c14600b8efb9ea8d7e63251a242ab987f13028b36d3d397ffaca3c929f67eb16"},
 ]
 
 [package.dependencies]

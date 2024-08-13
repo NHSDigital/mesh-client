@@ -98,7 +98,7 @@ jobs:
           python-version: "3.8"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v2
         with:
           poetry-version: 1.8.3
 
@@ -216,7 +216,7 @@ jobs:
           python-version: "3.8"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v2
         with:
           poetry-version: 1.8.3
 
@@ -301,7 +301,7 @@ jobs:
           python-version: "3.8"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v2
         with:
           poetry-version: 1.8.3
 

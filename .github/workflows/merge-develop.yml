@@ -23,7 +23,7 @@ jobs:
       - name: setup poetry
         uses: abatilo/actions-poetry@v3
         with:
-          poetry-version: 1.5.1
+          poetry-version: 1.8.3
 
       - name: add poetry plugins
         run: |
@@ -50,7 +50,7 @@ jobs:
 
       - name: code coverage report
         if: ${{ github.event_name == 'pull_request' }}
-        uses: orgoro/coverage@c65003f41276ea33fe3a3a5d53df8b340462e8fa
+        uses: orgoro/coverage@3f13a558c5af7376496aa4848bf0224aead366ac
         with:
           coverageFile: reports/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}

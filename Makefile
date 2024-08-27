@@ -32,6 +32,7 @@ clean_dist:
 	rm -r dist/ || true
 
 dist: clean_dist
+	pip install build
 	python -m build
 
 

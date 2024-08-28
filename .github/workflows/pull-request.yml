@@ -327,6 +327,9 @@ jobs:
           password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository-url: https://test.pypi.org/legacy/
 
+      - name: sleep while waiting for pyPI
+        run: sleep 30
+
       - name: install and test
         run: |
           poetry export -f requirements.txt -o requirements.txt

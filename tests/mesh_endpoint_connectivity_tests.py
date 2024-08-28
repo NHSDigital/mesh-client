@@ -1,9 +1,9 @@
 import itertools
 import socket
+from _socket import gaierror
 from urllib.parse import urlparse
 
 import pytest
-from _socket import gaierror
 from requests.exceptions import HTTPError, SSLError
 
 import mesh_client

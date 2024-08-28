@@ -189,10 +189,7 @@ def _looks_like_send_error(status_code: int, response_dict: dict) -> bool:
     if "errorDescription" in response_dict:
         return True
 
-    if "detail" in response_dict:
-        return True
-
-    return False
+    return "detail" in response_dict
 
 
 def _get_send_error_message(

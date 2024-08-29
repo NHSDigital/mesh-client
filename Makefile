@@ -32,6 +32,7 @@ clean_dist:
 	rm -r dist/ || true
 
 dist: clean_dist
+	pip install build
 	python -m build
 
 
@@ -64,13 +65,13 @@ shellcheck:
 	docker run --rm -i -v ${PWD}:/mnt:ro koalaman/shellcheck -f gcc -e SC1090,SC1091 `find . \( -path "*/.venv/*" -prune -o -path "*/build/*" -prune -o -path "*/.tox/*" -prune -o -path "*/java_client/*" -prune  \) -o -type f -name '*.sh' -print` || test $$? -eq 1
 
 ruff: black
-	poetry run ruff --fix --show-fixes .
+	poetry run ruff check --fix --show-fixes .
 
 ruff-check:
-	poetry run ruff .
+	poetry run ruff check .
 
 ruff-ci:
-	poetry run ruff --output-format=github .
+	poetry run ruff check --output-format=github .
 
 lint: ruff mypy shellcheck
 

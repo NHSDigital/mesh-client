@@ -26,9 +26,9 @@ jobs:
           python-version: "3.8"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v2
+        uses: abatilo/actions-poetry@v3
         with:
-          poetry-version: 1.5.1
+          poetry-version: 1.8.3
 
       - name: add poetry plugins
         run: |

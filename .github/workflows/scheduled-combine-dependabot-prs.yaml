@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: combine-prs
         id: combine-prs
-        uses: github/combine-prs@v5.0.0
+        uses: github/combine-prs@v5.2.0
         with:
           ci_required: ${{ inputs.ci_required == 'YES' }}
           labels: dependencies

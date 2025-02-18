@@ -723,7 +723,7 @@ class MeshClient:
                         compressed, checksum, partner_id, content_type
 
         Returns:
-            Response: raw http response
+            message_id: string
         """
 
         compress = self._transparent_compress if compress is None else compress

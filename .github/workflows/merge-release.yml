@@ -23,16 +23,12 @@ jobs:
       - name: setup python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
-          poetry-version: 1.8.3
-
-      - name: add poetry plugins
-        run: |
-          poetry self add "poetry-dynamic-versioning[plugin]"
+          poetry-version: 2.1.1
 
       - name: dist
         run: |

@@ -1,6 +1,6 @@
 import io
 import os.path
-from typing import List, cast
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -305,7 +305,7 @@ def test_msg_id_tracking(alice: MeshClient, bob: MeshClient):
 
 def test_endpoint_lookup(alice: MeshClient, bob: MeshClient):
     result = alice.lookup_endpoint("X26", "RESTRICTED_WORKFLOW")
-    result_list = cast(List[dict], result["results"])
+    result_list = cast(list[dict], result["results"])
     assert len(result_list) == 1
     assert result_list[0]["mailbox_id"] == "BOB"
     assert result_list[0]["mailbox_name"] == "TESTMB2"

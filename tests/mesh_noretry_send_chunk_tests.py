@@ -1,7 +1,6 @@
 import os.path
 import re
 from collections import defaultdict
-from typing import Dict, List, cast
 from uuid import uuid4
 
 import pytest
@@ -10,7 +9,7 @@ from pytest_httpserver import HTTPServer
 from requests import HTTPError
 from werkzeug import Request
 
-from mesh_client import MeshClient, SendMessageResponse_v2
+from mesh_client import MeshClient
 from tests.helpers import default_ssl_opts, json_response, plain_response
 
 alice_mailbox = "alice"
@@ -55,8 +54,8 @@ def test_chunk_retries(httpserver: HTTPServer, alice: MeshClient, bob: MeshClien
     assert send_re.match(f"{alice.mailbox_path}/outbox")
     assert send_re.match(f"{alice.mailbox_path}/outbox/{message_id}/2")
 
-    chunk_call_counts: Dict[int, int] = defaultdict(int)
-    received_chunks: List[bytes] = []
+    chunk_call_counts: dict[int, int] = defaultdict(int)
+    received_chunks: list[bytes] = []
 
     def send_chunk_handler(request: Request):
         last_path = request.path.split("/")[-1]
@@ -66,7 +65,7 @@ def test_chunk_retries(httpserver: HTTPServer, alice: MeshClient, bob: MeshClien
 
         if chunk_num == 1:
             received_chunks.append(request.data)
-            return json_response(cast(SendMessageResponse_v2, {"message_id": message_id}), status=202)
+            return json_response({"message_id": message_id}, status=202)
 
         if chunk_num == 2 and chunk_call_counts[chunk_num] < 4:
             return plain_response("", status=502)
@@ -95,8 +94,8 @@ def test_chunk_all_retries_fail(httpserver: HTTPServer, alice: MeshClient, bob: 
     assert send_re.match(f"{alice.mailbox_path}/outbox")
     assert send_re.match(f"{alice.mailbox_path}/outbox/{message_id}/2")
 
-    chunk_call_counts: Dict[int, int] = defaultdict(int)
-    received_chunks: List[bytes] = []
+    chunk_call_counts: dict[int, int] = defaultdict(int)
+    received_chunks: list[bytes] = []
 
     def send_chunk_handler(request: Request):
         last_path = request.path.split("/")[-1]
@@ -106,7 +105,7 @@ def test_chunk_all_retries_fail(httpserver: HTTPServer, alice: MeshClient, bob: 
 
         if chunk_num == 1:
             received_chunks.append(request.data)
-            return json_response(cast(SendMessageResponse_v2, {"message_id": message_id}), status=202)
+            return json_response({"message_id": message_id}, status=202)
 
         return plain_response("", status=502)
 
@@ -133,8 +132,8 @@ def test_chunk_retries_with_file(httpserver: HTTPServer, alice: MeshClient, bob:
     assert send_re.match(f"{alice.mailbox_path}/outbox")
     assert send_re.match(f"{alice.mailbox_path}/outbox/{message_id}/2")
 
-    chunk_call_counts: Dict[int, int] = defaultdict(int)
-    received_chunks: List[bytes] = []
+    chunk_call_counts: dict[int, int] = defaultdict(int)
+    received_chunks: list[bytes] = []
 
     def send_chunk_handler(request: Request):
         last_path = request.path.split("/")[-1]
@@ -144,7 +143,7 @@ def test_chunk_retries_with_file(httpserver: HTTPServer, alice: MeshClient, bob:
 
         if chunk_num == 1:
             received_chunks.append(request.data)
-            return json_response(cast(SendMessageResponse_v2, {"message_id": message_id}), status=202)
+            return json_response({"message_id": message_id}, status=202)
 
         if chunk_num == 2 and chunk_call_counts[chunk_num] < 4:
             return plain_response("", status=502)

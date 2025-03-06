@@ -18,23 +18,19 @@ jobs:
       - name: setup python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
-          poetry-version: 1.8.3
-
-      - name: add poetry plugins
-        run: |
-          poetry self add "poetry-dynamic-versioning[plugin]"
+          poetry-version: 2.1.1
 
       - name: cache virtualenv
         uses: actions/cache@v4
         with:
           path: |
             .venv
-          key: ${{ runner.os }}-v3-poetry-py3.8-${{ hashFiles('./poetry.lock') }}
+          key: ${{ runner.os }}-v3-poetry-py3.9-${{ hashFiles('./poetry.lock') }}
 
       - name: git reset
         run: git reset --hard
@@ -66,7 +62,7 @@ jobs:
       - name: provision sonar-scanner
         if: github.actor != 'dependabot[bot]' && (success() || failure())
         run: |
-          export SONAR_VERSION="4.7.0.2747"
+          export SONAR_VERSION="7.0.2.4839"
           wget -q "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
           unzip -q ./sonar-scanner.zip
           mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner

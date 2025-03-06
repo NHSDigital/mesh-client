@@ -1,7 +1,8 @@
 import contextlib
 import json
 import os
-from typing import Mapping, Optional
+from collections.abc import Mapping
+from typing import Optional
 
 from werkzeug import Response
 

@@ -9,7 +9,7 @@ jobs:
   tox:
     strategy:
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     runs-on: ubuntu-latest
     if: github.repository == 'NHSDigital/mesh-client'
@@ -95,23 +95,20 @@ jobs:
       - name: setup python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
-          poetry-version: 1.8.3
-
-      - name: add poetry plugins
-        run: |
-          poetry self add "poetry-dynamic-versioning[plugin]"
+          poetry-version: 2.1.1
+          poetry-plugins: poetry-dynamic-versioning[plugin] poetry-plugin-export
 
       - name: cache virtualenv
         uses: actions/cache@v4
         with:
           path: |
             .venv
-          key: ${{ runner.os }}-v3-poetry-py3.8-${{ hashFiles('./poetry.lock') }}
+          key: ${{ runner.os }}-v3-poetry-py3.9-${{ hashFiles('./poetry.lock') }}
 
       - name: git reset
         run: git reset --hard
@@ -123,49 +120,20 @@ jobs:
         run: make black-check
 
       - name: start docker containers
-        run: make up
+        run: | 
+          make up
+          sleep 10
+          docker ps
 
-      - name: code coverage
-        run: make coverage-ci
-
-      - name: code coverage report
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: orgoro/coverage@3f13a558c5af7376496aa4848bf0224aead366ac
-        with:
-          coverageFile: reports/coverage.xml
-          token: ${{ secrets.GITHUB_TOKEN }}
-          thresholdAll: 0.70
-
-      - name: setup java
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/setup-java@v4
-        with:
-          distribution: "corretto"
-          java-version: "17"
-
-      - name: provision sonar-scanner
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
+      - name: Run pytest with coverage
         run: |
-          export SONAR_VERSION="4.7.0.2747"
-          wget -q "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
-          unzip -q ./sonar-scanner.zip
-          mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
-          scripts/sonar_tests.py
+          poetry run pytest --cov --cov-report=xml:sonarcloud-coverage.xml --cov-branch .
 
-      - name: run sonar scan
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        run: |
-          PATH="$PWD/sonar-scanner/bin:$PATH"
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            git checkout "${GITHUB_HEAD_REF}"
-            sonar-scanner -Dsonar.pullrequest.branch="{{ github.event.pull_request.head.sha }}" -Dsonar.pullrequest.base="{{ github.event.pull_request.base.sha }}" -Dsonar.pullrequest.key="${{ github.event.number }}"
-          else
-            sonar-scanner
-          fi
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v4.2.1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
 
       - name: archive reports
         if: github.actor != 'dependabot[bot]' && (success() || failure())
@@ -213,23 +181,19 @@ jobs:
       - name: setup python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
-          poetry-version: 1.8.3
-
-      - name: add poetry plugins
-        run: |
-          poetry self add "poetry-dynamic-versioning[plugin]"
+          poetry-version: 2.1.1
 
       - name: cache virtualenv
         uses: actions/cache@v4
         with:
           path: |
             .venv
-          key: ${{ runner.os }}-v3-poetry-py3.8-${{ hashFiles('./poetry.lock') }}
+          key: ${{ runner.os }}-v3-poetry-py3.9-${{ hashFiles('./poetry.lock') }}
 
       - name: git reset
         run: git reset --hard
@@ -298,28 +262,17 @@ jobs:
       - name: setup python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
-          poetry-version: 1.8.3
-
-      - name: add poetry plugins
-        run: |
-          poetry self add "poetry-dynamic-versioning[plugin]"
+          poetry-version: 2.1.1
 
       - name: build dist
         run: |
           RELEASE_VERSION="$(poetry version prepatch | rev | cut -d' ' -f1 | rev  | sed -E 's/0+$//' )$(date '+%Y%m%d%H%M%S')"
-          echo "${RELEASE_VERSION}"
-          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
-          if [[ "${RELEASE_VERSION}" == "0.0.0" ]]; then
-            echo "${RELEASE_VERSION} = 0.0.0"
-            exit 1
-          fi
-          RELEASE_VERSION="${RELEASE_VERSION}" make dist
-          ls -l dist
+          poetry build
 
       - name: test publish
         uses: pypa/gh-action-pypi-publish@release/v1

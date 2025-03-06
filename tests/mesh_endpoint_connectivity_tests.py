@@ -4,8 +4,8 @@ from _socket import gaierror
 from urllib.parse import urlparse
 
 import pytest
-from requests.exceptions import ConnectionError as RequestsConnectionError, SSLError
-from requests.exceptions import HTTPError
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import HTTPError, SSLError
 
 import mesh_client
 from mesh_client import DEPRECATED_HSCN_INT_ENDPOINT, Endpoint, MeshClient
@@ -36,9 +36,10 @@ UNABLE_TO_CONNECT_TO_PROXY_ERROR = "Unable to connect to proxy"
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints(name: str, endpoint: Endpoint):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -48,9 +49,10 @@ def test_hscn_endpoints(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_verify_false(name: str, endpoint: Endpoint):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -61,9 +63,10 @@ def test_hscn_endpoints_verify_false(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -75,9 +78,12 @@ def test_hscn_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_common_name_check_false(name: str, endpoint: Endpoint):
-    with pytest.raises(SSLError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
-    ) as client:
+    with (
+        pytest.raises(SSLError) as err,
+        MeshClient(
+            endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
+        ) as client,
+    ):
         client.ping()
 
     assert err.value.args[0].reason.args[0].reason == "CERTIFICATE_VERIFY_FAILED"
@@ -85,9 +91,10 @@ def test_hscn_endpoints_common_name_check_false(name: str, endpoint: Endpoint):
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints(name: str, endpoint: Endpoint):
-    with pytest.raises(RequestsConnectionError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.ping()
 
     # the internet endpoints behave differently they will not return a 400 bad request
@@ -97,9 +104,12 @@ def test_internet_endpoints(name: str, endpoint: Endpoint):
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_common_name_check_false(name: str, endpoint: Endpoint):
-    with pytest.raises(RequestsConnectionError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(
+            endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
+        ) as client,
+    ):
         client.ping()
 
     # the internet endpoints behave differently they will not return a 400 bad request
@@ -109,9 +119,10 @@ def test_internet_endpoints_common_name_check_false(name: str, endpoint: Endpoin
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_verify_false(name: str, endpoint: Endpoint):
-    with pytest.raises(RequestsConnectionError) as err, MeshClient(
-        endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False) as client,
+    ):
         client.ping()
 
     # the internet endpoints behave differently they will not return a 400 bad request
@@ -121,9 +132,10 @@ def test_internet_endpoints_verify_false(name: str, endpoint: Endpoint):
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
-    with pytest.raises(RequestsConnectionError) as err, MeshClient(
-        endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=None
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=None) as client,
+    ):
         client.ping()
 
     # the internet endpoints behave differently they will not return a 400 bad request
@@ -133,9 +145,12 @@ def test_internet_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_with_port_defaults_from_hostname(name: str, endpoint: Endpoint):
-    with pytest.raises(RequestsConnectionError) as err, MeshClient(
-        f"{endpoint.url}:443", "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=None
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(
+            f"{endpoint.url}:443", "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=None
+        ) as client,
+    ):
         client.ping()
 
     # the internet endpoints behave differently they will not return a 400 bad request
@@ -149,14 +164,17 @@ def test_internet_endpoints_with_port_defaults_from_hostname(name: str, endpoint
 )
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_check_hostname(name: str, endpoint: Endpoint, check_hostname: bool):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint.url,
-        "BADUSERNAME",
-        "BADPASSWORD",
-        cert=(MOCK_CERT, MOCK_KEY),
-        verify=endpoint.verify,
-        check_hostname=check_hostname,
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(
+            endpoint.url,
+            "BADUSERNAME",
+            "BADPASSWORD",
+            cert=(MOCK_CERT, MOCK_KEY),
+            verify=endpoint.verify,
+            check_hostname=check_hostname,
+        ) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -169,14 +187,17 @@ def test_hscn_endpoints_check_hostname(name: str, endpoint: Endpoint, check_host
     [(ep[0], ep[1], check_hostname) for check_hostname, ep in itertools.product([True, False], _INTERNET_ENDPOINTS)],
 )
 def test_internet_endpoints_check_hostname(name: str, endpoint: Endpoint, check_hostname: bool):
-    with pytest.raises(RequestsConnectionError) as err, MeshClient(
-        endpoint.url,
-        "BADUSERNAME",
-        "BADPASSWORD",
-        cert=(MOCK_CERT, MOCK_KEY),
-        verify=endpoint.verify,
-        check_hostname=check_hostname,
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(
+            endpoint.url,
+            "BADUSERNAME",
+            "BADPASSWORD",
+            cert=(MOCK_CERT, MOCK_KEY),
+            verify=endpoint.verify,
+            check_hostname=check_hostname,
+        ) as client,
+    ):
         client.ping()
 
     # the internet endpoints behave differently they will not return a 400 bad request
@@ -187,13 +208,16 @@ def test_internet_endpoints_check_hostname(name: str, endpoint: Endpoint, check_
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint,
-        "BADUSERNAME",
-        "BADPASSWORD",
-        cert=(MOCK_CERT, MOCK_KEY),
-        proxies={"https": "http://localhost:8019"},
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(
+            endpoint,
+            "BADUSERNAME",
+            "BADPASSWORD",
+            cert=(MOCK_CERT, MOCK_KEY),
+            proxies={"https": "http://localhost:8019"},
+        ) as client,
+    ):
         client.ping()
     assert err.value.response is not None
 
@@ -203,9 +227,11 @@ def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_via_an_ambient_proxy(name: str, endpoint: Endpoint):
-    with temp_env_vars(HTTPS_PROXY="http://localhost:8019"), pytest.raises(HTTPError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        temp_env_vars(HTTPS_PROXY="http://localhost:8019"),
+        pytest.raises(HTTPError) as err,
+        MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -215,13 +241,16 @@ def test_hscn_endpoints_via_an_ambient_proxy(name: str, endpoint: Endpoint):
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_via_explicit_proxy(name: str, endpoint: Endpoint):
-    with pytest.raises(RequestsConnectionError) as err, MeshClient(
-        endpoint,
-        "BADUSERNAME",
-        "BADPASSWORD",
-        cert=(MOCK_CERT, MOCK_KEY),
-        proxies={"https": "http://localhost:8019"},
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(
+            endpoint,
+            "BADUSERNAME",
+            "BADPASSWORD",
+            cert=(MOCK_CERT, MOCK_KEY),
+            proxies={"https": "http://localhost:8019"},
+        ) as client,
+    ):
         client.handshake()
 
     # the internet endpoints behave differently they will not return a 400 bad request
@@ -231,9 +260,11 @@ def test_internet_endpoints_via_explicit_proxy(name: str, endpoint: Endpoint):
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_via_ambient_proxy(name: str, endpoint: Endpoint):
-    with temp_env_vars(HTTPS_PROXY="http://localhost:8019"), pytest.raises(RequestsConnectionError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        temp_env_vars(HTTPS_PROXY="http://localhost:8019"),
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.handshake()
 
     # the internet endpoints behave differently they will not return a 400 bad request

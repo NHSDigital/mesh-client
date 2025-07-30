@@ -10,11 +10,11 @@ packages = [
 ]
 readme = "README.md"
 classifiers = [
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 # including this would turn on pyproject.toml for setuptools and fail validation
@@ -26,7 +26,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 # core dependencies
-python = ">=3.7"
+python = ">=3.9"
 urllib3 = ">=1.25.4"
 requests = [{version = ">=2.26.0", markers = "python_version<'3.8'"},{version = ">=2.32.0", markers = "python_version>='3.8'"}]
 werkzeug = [{version = ">2.0.0", markers = "python_version<'3.8'"},{version = ">=3.0.3", markers = "python_version>='3.8'"}]
@@ -87,7 +87,7 @@ exclude = [
 ]
 lint.unfixable = ["SIM112"]
 line-length = 120
-target-version = "py37"
+target-version = "py39"
 
 
 [tool.pytest.ini_options]
@@ -98,7 +98,7 @@ norecursedirs = ".git .venv .eggs build dist terraform features"
 
 [tool.black]
 line-length = 120
-target-version = ['py37']
+target-version = ['py39']
 include = '\.pyi?$'
 #extend-exclude = '''
 #/(
@@ -114,15 +114,15 @@ include = '\.pyi?$'
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py37,py38,py39,py310,py311
+envlist = py39,py310,py311,py312,py313
 
 [gh-actions]
 python =
-    3.7: py37
-    3.8: py38
     3.9: py39
     3.10: py310
     3.11: py311
+    3.12: py312
+    3.13: py313
 
 [testenv:.pkg]
 set_env =
@@ -183,7 +183,7 @@ show_missing = true
 output = "reports/coverage.xml"
 
 [tool.mypy]
-python_version = "3.7"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 show_error_codes = true
@@ -191,7 +191,7 @@ check_untyped_defs = true
 
 
 [tool.poetry-dynamic-versioning]
-enable = true
+enable = false
 metadata = false
 vcs = "git"
 style = "pep440"

@@ -10,12 +10,13 @@ import ssl
 import sys
 import uuid
 import warnings
+from collections.abc import Generator
 from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
 from itertools import chain
 from types import TracebackType
-from typing import Any, Dict, Generator, List, NoReturn, Optional, Tuple, Type, TypeVar, Union, cast
+from typing import Any, Dict, List, NoReturn, Optional, Tuple, Type, TypeVar, Union, cast
 from urllib.parse import quote as q
 from urllib.parse import urlparse
 

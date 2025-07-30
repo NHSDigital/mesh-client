@@ -4,6 +4,7 @@ from _socket import gaierror
 from urllib.parse import urlparse
 
 import pytest
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import HTTPError, SSLError
 
 import mesh_client
@@ -27,14 +28,23 @@ _ENDPOINTS = [(name, endpoint) for name, endpoint in mesh_client.ENDPOINTS if no
 _INTERNET_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if not name.startswith("DEPRECATED_HSCN_")]
 
 _HSCN_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if name.startswith("DEPRECATED_HSCN_")]
+_DEP_HSCN_ENDPOINT = [(name, endpoint) for name, endpoint in _HSCN_ENDPOINTS if name == "DEPRECATED_HSCN_DEP_ENDPOINT"]
+_NON_DEP_HSCN_ENDPOINTS = [
+    (name, endpoint) for name, endpoint in _HSCN_ENDPOINTS if name != "DEPRECATED_HSCN_DEP_ENDPOINT"
+]
+
+CONNECTION_ABORTED_ERROR = "Connection aborted."
+REMOTE_END_CLOSED_CONNECTION = "Remote end closed connection without response"
+CANNOT_CONNECT_TO_PROXY = "Cannot connect to proxy."
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints(name: str, endpoint: Endpoint):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -44,9 +54,10 @@ def test_hscn_endpoints(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_verify_false(name: str, endpoint: Endpoint):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -57,88 +68,113 @@ def test_hscn_endpoints_verify_false(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
 
     assert err.value.response.status_code == 400
+    assert err.value.args[0] == f"400 Client Error: Bad Request for url: {endpoint.url}/messageexchange/_ping"
+    assert "SSL certificate error" in err.value.response.text
 
 
-@pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
-@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
-def test_hscn_endpoints_common_name_check_false(name: str, endpoint: Endpoint):
-    with pytest.raises(SSLError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
-    ) as client:
+@pytest.mark.parametrize(("name", "endpoint"), _DEP_HSCN_ENDPOINT)
+@pytest.mark.skipif(
+    not _host_resolves(mesh_client.DEPRECATED_HSCN_DEP_ENDPOINT), reason="these hosts will only resolve on HSCN"
+)
+def test_dep_hscn_endpoint_common_name_check_false(name: str, endpoint: Endpoint):
+    with (
+        pytest.raises(SSLError) as err,
+        MeshClient(
+            endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
+        ) as client,
+    ):
         client.ping()
 
     assert err.value.args[0].reason.args[0].reason == "CERTIFICATE_VERIFY_FAILED"
 
 
-@pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
-def test_internet_endpoints(name: str, endpoint: Endpoint):
-    with pytest.raises(SSLError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+@pytest.mark.parametrize(("name", "endpoint"), _NON_DEP_HSCN_ENDPOINTS)
+@pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
+def test_non_dep_hscn_endpoints_common_name_check_false(name: str, endpoint: Endpoint):
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(
+            endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
+        ) as client,
+    ):
         client.ping()
 
-    # the internet endpoints behave differently they will not return a 400 bad request
-    # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"
-    assert err.value.args[0].reason.args[0].reason == "TLSV1_ALERT_UNKNOWN_CA"
+    assert err.value.args[0] == f"400 Client Error: Bad Request for url: {endpoint.url}/messageexchange/_ping"
+    assert err.value.response.status_code == 400
+    assert "SSL certificate error" in err.value.response.text
+
+
+@pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
+def test_internet_endpoints(name: str, endpoint: Endpoint):
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
+        client.ping()
+
+    assert err.value.args[0].reason.args[0] == CONNECTION_ABORTED_ERROR
+    assert isinstance(err.value.args[0].reason.args[1], ConnectionResetError)
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_common_name_check_false(name: str, endpoint: Endpoint):
-    with pytest.raises(SSLError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(
+            endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), hostname_checks_common_name=False
+        ) as client,
+    ):
         client.ping()
 
-    # the internet endpoints behave differently they will not return a 400 bad request
-    # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"
-    if endpoint.hostname_checks_common_name:
-        assert err.value.args[0].reason.args[0].reason == "CERTIFICATE_VERIFY_FAILED"
-    else:
-        assert err.value.args[0].reason.args[0].reason == "TLSV1_ALERT_UNKNOWN_CA"
+    assert err.value.args[0].reason.args[0] == CONNECTION_ABORTED_ERROR
+    assert isinstance(err.value.args[0].reason.args[1], ConnectionResetError)
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_verify_false(name: str, endpoint: Endpoint):
-    with pytest.raises(SSLError) as err, MeshClient(
-        endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=False) as client,
+    ):
         client.ping()
 
-    # the internet endpoints behave differently they will not return a 400 bad request
-    # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"
-    assert err.value.args[0].reason.args[0].reason == "TLSV1_ALERT_UNKNOWN_CA"
+    assert err.value.args[0].reason.args[0] == CONNECTION_ABORTED_ERROR
+    assert isinstance(err.value.args[0].reason.args[1], ConnectionResetError)
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
-    with pytest.raises(SSLError) as err, MeshClient(
-        endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=None
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(endpoint.url, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=None) as client,
+    ):
         client.ping()
 
-    # the internet endpoints behave differently they will not return a 400 bad request
-    # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"
-    assert err.value.args[0].reason.args[0].reason == "TLSV1_ALERT_UNKNOWN_CA"
+    assert err.value.args[0].reason.args[0] == CONNECTION_ABORTED_ERROR
+    assert isinstance(err.value.args[0].reason.args[1], ConnectionResetError)
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_with_port_defaults_from_hostname(name: str, endpoint: Endpoint):
-    with pytest.raises(SSLError) as err, MeshClient(
-        f"{endpoint.url}:443", "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=None
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(
+            f"{endpoint.url}:443", "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY), verify=None
+        ) as client,
+    ):
         client.ping()
 
-    # the internet endpoints behave differently they will not return a 400 bad request
-    # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"
-    assert err.value.args[0].reason.args[0].reason == "TLSV1_ALERT_UNKNOWN_CA"
+    assert err.value.args[0].reason.args[0] == CONNECTION_ABORTED_ERROR
+    assert isinstance(err.value.args[0].reason.args[1], ConnectionResetError)
 
 
 @pytest.mark.parametrize(
@@ -147,14 +183,17 @@ def test_internet_endpoints_with_port_defaults_from_hostname(name: str, endpoint
 )
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_check_hostname(name: str, endpoint: Endpoint, check_hostname: bool):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint.url,
-        "BADUSERNAME",
-        "BADPASSWORD",
-        cert=(MOCK_CERT, MOCK_KEY),
-        verify=endpoint.verify,
-        check_hostname=check_hostname,
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(
+            endpoint.url,
+            "BADUSERNAME",
+            "BADPASSWORD",
+            cert=(MOCK_CERT, MOCK_KEY),
+            verify=endpoint.verify,
+            check_hostname=check_hostname,
+        ) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -167,31 +206,37 @@ def test_hscn_endpoints_check_hostname(name: str, endpoint: Endpoint, check_host
     [(ep[0], ep[1], check_hostname) for check_hostname, ep in itertools.product([True, False], _INTERNET_ENDPOINTS)],
 )
 def test_internet_endpoints_check_hostname(name: str, endpoint: Endpoint, check_hostname: bool):
-    with pytest.raises(SSLError) as err, MeshClient(
-        endpoint.url,
-        "BADUSERNAME",
-        "BADPASSWORD",
-        cert=(MOCK_CERT, MOCK_KEY),
-        verify=endpoint.verify,
-        check_hostname=check_hostname,
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(
+            endpoint.url,
+            "BADUSERNAME",
+            "BADPASSWORD",
+            cert=(MOCK_CERT, MOCK_KEY),
+            verify=endpoint.verify,
+            check_hostname=check_hostname,
+        ) as client,
+    ):
         client.ping()
 
-    # the internet endpoints behave differently they will not return a 400 bad request
-    # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"
-    assert err.value.args[0].reason.args[0].reason == "TLSV1_ALERT_UNKNOWN_CA"
+    assert err.value.args[0].reason.args[0] == CONNECTION_ABORTED_ERROR
+    assert isinstance(err.value.args[0].reason.args[1], ConnectionResetError)
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
-    with pytest.raises(HTTPError) as err, MeshClient(
-        endpoint,
-        "BADUSERNAME",
-        "BADPASSWORD",
-        cert=(MOCK_CERT, MOCK_KEY),
-        proxies={"https": "http://localhost:8019"},
-    ) as client:
+    with (
+        pytest.raises(HTTPError) as err,
+        MeshClient(
+            endpoint,
+            "BADUSERNAME",
+            "BADPASSWORD",
+            cert=(MOCK_CERT, MOCK_KEY),
+            proxies={"https": "http://localhost:8019"},
+            timeout=10,
+        ) as client,
+    ):
         client.ping()
     assert err.value.response is not None
 
@@ -201,9 +246,11 @@ def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_via_an_ambient_proxy(name: str, endpoint: Endpoint):
-    with temp_env_vars(HTTPS_PROXY="http://localhost:8019"), pytest.raises(HTTPError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        temp_env_vars(HTTPS_PROXY="http://localhost:8019"),
+        pytest.raises(HTTPError) as err,
+        MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.ping()
 
     assert err.value.response is not None
@@ -213,27 +260,30 @@ def test_hscn_endpoints_via_an_ambient_proxy(name: str, endpoint: Endpoint):
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_via_explicit_proxy(name: str, endpoint: Endpoint):
-    with pytest.raises(SSLError) as err, MeshClient(
-        endpoint,
-        "BADUSERNAME",
-        "BADPASSWORD",
-        cert=(MOCK_CERT, MOCK_KEY),
-        proxies={"https": "http://localhost:8019"},
-    ) as client:
+    with (
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(
+            endpoint,
+            "BADUSERNAME",
+            "BADPASSWORD",
+            cert=(MOCK_CERT, MOCK_KEY),
+            proxies={"https": "http://localhost:8019"},
+        ) as client,
+    ):
         client.handshake()
 
-    # the internet endpoints behave differently they will not return a 400 bad request
-    # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"
-    assert err.value.args[0].reason.args[0].reason == "TLSV1_ALERT_UNKNOWN_CA"
+    assert err.value.args[0].reason.args[0] == CANNOT_CONNECT_TO_PROXY
+    assert str(err.value.args[0].reason.args[1]) == REMOTE_END_CLOSED_CONNECTION
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_via_ambient_proxy(name: str, endpoint: Endpoint):
-    with temp_env_vars(HTTPS_PROXY="http://localhost:8019"), pytest.raises(SSLError) as err, MeshClient(
-        endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)
-    ) as client:
+    with (
+        temp_env_vars(HTTPS_PROXY="http://localhost:8019"),
+        pytest.raises(RequestsConnectionError) as err,
+        MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
+    ):
         client.handshake()
 
-    # the internet endpoints behave differently they will not return a 400 bad request
-    # in this case, TLSV1_ALERT_UNKNOWN_CA actually means "I don't accept this client certificate"
-    assert err.value.args[0].reason.args[0].reason == "TLSV1_ALERT_UNKNOWN_CA"
+    assert err.value.args[0].reason.args[0] == CANNOT_CONNECT_TO_PROXY
+    assert str(err.value.args[0].reason.args[1]) == REMOTE_END_CLOSED_CONNECTION

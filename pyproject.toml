@@ -78,9 +78,7 @@ lint.select = [
     "SIM", # flake8-simplify
 ]
 src = ["."]
-lint.ignore = [
-    "PT004"
-]
+lint.ignore = []
 exclude = [
     ".git",
     ".venv",

@@ -16,7 +16,7 @@ from hashlib import sha256
 from io import BytesIO
 from itertools import chain
 from types import TracebackType
-from typing import Any, Dict, List, NoReturn, Optional, Tuple, Type, TypeVar, Union, cast
+from typing import Any, NoReturn, Optional, TypeVar, Union, cast
 from urllib.parse import quote as q
 from urllib.parse import urlparse
 
@@ -46,14 +46,14 @@ from .types import (
     TrackingResponse_v2,
 )
 
-if sys.version_info[:2] < (3, 8):
-    warnings.warn("python 3.7 is now end of life", category=DeprecationWarning, stacklevel=2)
+if sys.version_info[:2] < (3, 9):  # noqa: UP036
+    warnings.warn(
+        "python versions < 3.9 are end of life and no longer supported as of mesh-client v4",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
 
-if sys.version_info[:2] >= (3, 8):
-    # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
-    from importlib.metadata import PackageNotFoundError, version
-else:
-    from importlib_metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError, version
 
 
 def _get_version(*names: str) -> str:
@@ -76,7 +76,7 @@ LIVE_CA_CERT = os.path.join(_PACKAGE_DIR, "nhs-live-ca-bundle.pem")
 DEFAULT_MEDIA_TYPE = "application/octet-stream"
 
 
-_OPTIONAL_HEADERS: Dict[str, str] = {
+_OPTIONAL_HEADERS: dict[str, str] = {
     "workflow_id": "Mex-WorkflowID",
     "filename": "Mex-FileName",
     "local_id": "Mex-LocalID",
@@ -89,7 +89,7 @@ _OPTIONAL_HEADERS: Dict[str, str] = {
 }
 
 
-def optional_header_map() -> Dict[str, str]:
+def optional_header_map() -> dict[str, str]:
     return _OPTIONAL_HEADERS.copy()
 
 
@@ -136,7 +136,7 @@ _HOSTNAME_ENDPOINT_MAP = {urlparse(ep.url).hostname: ep for name, ep in ENDPOINT
 
 # urllib3 'futures' ( not part of 1.26 .. but available in  2.x )
 def reraise(
-    tp: Optional[Type[BaseException]],
+    tp: Optional[type[BaseException]],
     value: BaseException,
     tb: Optional[TracebackType] = None,
 ) -> NoReturn:
@@ -195,7 +195,7 @@ def _looks_like_send_error(status_code: int, response_dict: dict) -> bool:
 
 def _get_send_error_message(
     response_dict: dict,
-) -> Tuple[str, Union[SendMessageErrorResponse_v1, SendMessageErrorResponse_v2, dict]]:
+) -> tuple[str, Union[SendMessageErrorResponse_v1, SendMessageErrorResponse_v2, dict]]:
     if "errorDescription" in response_dict:
         return response_dict["errorDescription"], cast(SendMessageErrorResponse_v1, response_dict)
 
@@ -243,7 +243,7 @@ class MeshRetry(Retry):
 class SSLContextAdapter(HTTPAdapter):
     def __init__(
         self,
-        cert: Optional[Union[Tuple[str], Tuple[str, str], Tuple[str, str, str]]] = None,
+        cert: Optional[Union[tuple[str], tuple[str, str], tuple[str, str, str]]] = None,
         verify: Optional[Union[str, bool]] = None,
         check_hostname: Optional[bool] = None,
         hostname_checks_common_name: Optional[bool] = None,
@@ -310,17 +310,17 @@ class MeshClient:
         mailbox: str,
         password: str,
         shared_key: Optional[bytes] = None,
-        cert: Optional[Union[Tuple[str], Tuple[str, str], Tuple[str, str, str]]] = None,
+        cert: Optional[Union[tuple[str], tuple[str, str], tuple[str, str, str]]] = None,
         verify: Optional[Union[str, bool]] = None,
         check_hostname: Optional[bool] = None,
         hostname_checks_common_name: Optional[bool] = None,
         max_chunk_size=75 * 1024 * 1024,
-        proxies: Optional[Dict[str, str]] = None,
+        proxies: Optional[dict[str, str]] = None,
         transparent_compress: bool = False,
         max_retries: Union[int, Retry] = 3,
         retry_backoff_factor: Union[int, float] = 0.5,
-        retry_status_force_list: Tuple[int, ...] = (425, 429, 502, 503, 504),
-        retry_methods: Tuple[str, ...] = ("HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"),
+        retry_status_force_list: tuple[int, ...] = (425, 429, 502, 503, 504),
+        retry_methods: tuple[str, ...] = ("HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"),
         timeout: Union[int, float] = 10 * 60,
         application_name: Optional[str] = None,
     ):
@@ -499,7 +499,7 @@ class MeshClient:
         return cast(EndpointLookupResponse_v2, response.json())
 
     def _inbox_v2_page(
-        self, url: Optional[str] = None, params: Optional[Dict[str, Any]] = None
+        self, url: Optional[str] = None, params: Optional[dict[str, Any]] = None
     ) -> ListMessageResponse_v2:
         url = url or f"{self.mailbox_url}/inbox"
         response = self._session.get(url, timeout=self._timeout, params=params)
@@ -507,7 +507,7 @@ class MeshClient:
 
         return cast(ListMessageResponse_v2, response.json())
 
-    def list_messages(self, max_results: Optional[int] = None, workflow_filter: Optional[str] = None) -> List[str]:
+    def list_messages(self, max_results: Optional[int] = None, workflow_filter: Optional[str] = None) -> list[str]:
         """
             lists messages ids in the inbox; note if workflow_filter is set  it's possible to receive an empty page
             when more results exist outside the first max_results
@@ -518,10 +518,10 @@ class MeshClient:
             workflow_filter (Optional[str]): workflow filter string
 
         Returns:
-            List[str]: message ids
+            list[str]: message ids
         """
 
-        params: Dict[str, Union[str, int]] = {}
+        params: dict[str, Union[str, int]] = {}
         if max_results:
             if max_results < 10:
                 raise ValueError("if set max_results should be >= 10")
@@ -532,7 +532,7 @@ class MeshClient:
 
         result = self._inbox_v2_page(params=params)
 
-        return cast(List[str], result.get("messages", []))
+        return cast(list[str], result.get("messages", []))
 
     def retrieve_message(self, message_id: str) -> "Message":
         """
@@ -572,7 +572,7 @@ class MeshClient:
     @staticmethod
     def _headers_for_chunk(
         recipient: str, chunk_num: int, total_chunks: int, compress: bool, **kwargs
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         if chunk_num > 1:
             headers = {
                 "Content-Type": DEFAULT_MEDIA_TYPE,
@@ -793,7 +793,7 @@ class MeshClient:
             Generator[str]: message ids
         """
 
-        params: Dict[str, Union[int, str]] = {}
+        params: dict[str, Union[int, str]] = {}
         if batch_size:
             if batch_size < 10:
                 raise ValueError("if set batch_size should be >= 10")
@@ -802,9 +802,9 @@ class MeshClient:
         if workflow_filter:
             params["workflow_filter"] = workflow_filter
 
-        def _next_messages(page_result: ListMessageResponse_v2) -> Tuple[Optional[str], List[str]]:
-            return cast(Dict[str, str], page_result.get("links", {})).get("next"), cast(
-                List[str], page_result.get("messages", [])
+        def _next_messages(page_result: ListMessageResponse_v2) -> tuple[Optional[str], list[str]]:
+            return cast(dict[str, str], page_result.get("links", {})).get("next"), cast(
+                list[str], page_result.get("messages", [])
             )
 
         result = self._inbox_v2_page(params=params)
@@ -941,7 +941,7 @@ class _BaseMessage:
     def __init__(self, msg_id: str, response, client):
         self._msg_id = msg_id
         self._client = client
-        self._mex_headers: Dict[str, Any] = {}
+        self._mex_headers: dict[str, Any] = {}
 
         headers = response.headers
 
@@ -994,7 +994,7 @@ class _BaseMessage:
         """
         return self._stream.readline()
 
-    def readlines(self) -> List[bytes]:
+    def readlines(self) -> list[bytes]:
         """
         Read all lines from the message
         """
@@ -1014,7 +1014,7 @@ class _BaseMessage:
         """
         self._client.acknowledge_message(self._msg_id)
 
-    def mex_header(self, key: str, default: Optional[TDefault] = None) -> Union[str, TDefault]:
+    def mex_header(self, key: str, default: Optional[TDefault] = None) -> Union[str, Optional[TDefault]]:
         """get a mex header if present
 
         Args:

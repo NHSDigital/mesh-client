@@ -3,7 +3,7 @@ import io
 import os
 import warnings
 import zlib
-from typing import List, cast
+from typing import cast
 
 
 class IteratorMixin:
@@ -40,7 +40,7 @@ class IteratorMixin:
         except StopIteration:
             return b""
 
-    def readlines(self) -> List[bytes]:
+    def readlines(self) -> list[bytes]:
         return list(iter(self))
 
 

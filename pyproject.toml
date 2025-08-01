@@ -109,36 +109,6 @@ include = '\.pyi?$'
 
 
 
-[tool.tox]
-legacy_tox_ini = """
-[tox]
-envlist = py39,py310,py311,py312,py313
-
-[gh-actions]
-python =
-    3.9: py39
-    3.10: py310
-    3.11: py311
-    3.12: py312
-    3.13: py313
-
-[testenv:.pkg]
-set_env =
-    RELEASE_VERSION=1.2.3
-
-[testenv]
-wheel_build_env = .pkg
-use_develop = true
-package = wheel
-deps =
-    requests>=2.26.0
-    mock
-    pytest
-    pytest-httpserver
-commands =
-    python -m pytest
-
-"""
 
 [tool.coverage.run]
 branch = true
@@ -189,7 +159,7 @@ check_untyped_defs = true
 
 
 [tool.poetry-dynamic-versioning]
-enable = false
+enable = true
 metadata = false
 vcs = "git"
 style = "pep440"

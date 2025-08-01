@@ -196,10 +196,8 @@ def test_readlines(alice: MeshClient, bob: MeshClient):
 
 
 def test_transparent_compression(alice: MeshClient, bob: MeshClient):
-    print("Sending")
     message_id = alice.send_message(bob_mailbox, b"Hello Bob Compressed", workflow_id=uuid4().hex, compress=True)
     assert bob.list_messages() == [message_id]
-    print("Receiving")
     msg = bob.retrieve_message(message_id)
     assert msg.compressed
     assert msg.read() == b"Hello Bob Compressed"

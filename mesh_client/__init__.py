@@ -220,7 +220,7 @@ class MeshRetry(Retry):
         error: Optional[Exception] = None,
         _pool: Optional[ConnectionPool] = None,
         _stacktrace: Optional[TracebackType] = None,
-    ) -> Retry:
+    ) -> "MeshRetry":
         if method != "POST" or not url or not url.endswith("/outbox"):
             return super().increment(method, url, response, error, _pool, _stacktrace)
 

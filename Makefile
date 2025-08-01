@@ -93,7 +93,6 @@ black-check:
 black:
 	poetry run black .
 
-
 coverage-cleanup:
 	rm -f .coverage* || true
 
@@ -121,7 +120,7 @@ tox:
 down:
 	docker compose down --remove-orphans || true
 
-up:
+up: create-test-certs-keys
 	docker compose up -d --remove-orphans --build
 
 coverage-ci: coverage-cleanup coverage-ci-test coverage-report
@@ -134,3 +133,6 @@ check-secrets-all:
 
 export-requirements:
 	poetry export --only main -f requirements.txt --output ./requirements.txt
+
+create-test-certs-keys:
+	./scripts/create-test-certs-keys.sh

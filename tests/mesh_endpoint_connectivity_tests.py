@@ -33,6 +33,8 @@ _HSCN_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if name.sta
 CONNECTION_ABORTED_ERROR = "Connection aborted."
 REMOTE_END_CLOSED_CONNECTION = "Remote end closed connection without response"
 UNABLE_TO_CONNECT_TO_PROXY = "Unable to connect to proxy"
+SSL_CERTIFICATE_ERROR = "SSL certificate error"
+LOCAL_HTTPS_PROXY_URL = "http://localhost:8019"
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
@@ -82,7 +84,7 @@ def test_hscn_endpoints_defaults_from_hostname(name: str, endpoint: Endpoint):
         assert err.value.response is not None
         assert err.value.response.status_code == 400
         assert err.value.args[0] == f"400 Client Error: Bad Request for url: {endpoint.url}/messageexchange/_ping"
-        assert "SSL certificate error" in err.value.response.text
+        assert SSL_CERTIFICATE_ERROR in err.value.response.text
 
 
 @pytest.mark.parametrize(("name", "endpoint"), _HSCN_ENDPOINTS)
@@ -101,7 +103,7 @@ def test_dep_hscn_endpoint_common_name_check_false(name: str, endpoint: Endpoint
     else:
         assert err.value.response is not None
         assert err.value.args[0] == f"400 Client Error: Bad Request for url: {endpoint.url}/messageexchange/_ping"
-        assert "SSL certificate error" in err.value.response.text
+        assert SSL_CERTIFICATE_ERROR in err.value.response.text
         assert err.value.response.status_code == 400
 
 
@@ -203,7 +205,7 @@ def test_hscn_endpoints_check_hostname(name: str, endpoint: Endpoint, check_host
     else:
         assert err.value.response is not None
         assert err.value.args[0] == f"400 Client Error: Bad Request for url: {endpoint.url}/messageexchange/_ping"
-        assert "SSL certificate error" in err.value.response.text
+        assert SSL_CERTIFICATE_ERROR in err.value.response.text
         assert err.value.response.status_code == 400
 
 
@@ -242,7 +244,7 @@ def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
             "BADUSERNAME",
             "BADPASSWORD",
             cert=(MOCK_CERT, MOCK_KEY),
-            proxies={"https": "http://localhost:8019"},
+            proxies={"https": LOCAL_HTTPS_PROXY_URL},
             timeout=10,
         ) as client,
     ):
@@ -253,7 +255,7 @@ def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
     else:
         assert err.value.response is not None
         assert err.value.args[0] == f"400 Client Error: Bad Request for url: {endpoint.url}/messageexchange/_ping"
-        assert "SSL certificate error" in err.value.response.text
+        assert SSL_CERTIFICATE_ERROR in err.value.response.text
         assert err.value.response.status_code == 400
 
 
@@ -261,7 +263,7 @@ def test_hscn_endpoints_via_an_explicit_proxy(name: str, endpoint: Endpoint):
 @pytest.mark.skipif(not _host_resolves(DEPRECATED_HSCN_INT_ENDPOINT), reason="these hosts will only resolve on HSCN")
 def test_hscn_endpoints_via_an_ambient_proxy(name: str, endpoint: Endpoint):
     with (
-        temp_env_vars(HTTPS_PROXY="http://localhost:8019"),
+        temp_env_vars(HTTPS_PROXY=LOCAL_HTTPS_PROXY_URL),
         pytest.raises((HTTPError, SSLError)) as err,
         MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
     ):
@@ -272,7 +274,7 @@ def test_hscn_endpoints_via_an_ambient_proxy(name: str, endpoint: Endpoint):
     else:
         assert err.value.response is not None
         assert err.value.args[0] == f"400 Client Error: Bad Request for url: {endpoint.url}/messageexchange/_ping"
-        assert "SSL certificate error" in err.value.response.text
+        assert SSL_CERTIFICATE_ERROR in err.value.response.text
         assert err.value.response.status_code == 400
 
 
@@ -285,7 +287,7 @@ def test_internet_endpoints_via_explicit_proxy(name: str, endpoint: Endpoint):
             "BADUSERNAME",
             "BADPASSWORD",
             cert=(MOCK_CERT, MOCK_KEY),
-            proxies={"https": "http://localhost:8019"},
+            proxies={"https": LOCAL_HTTPS_PROXY_URL},
         ) as client,
     ):
         client.handshake()
@@ -300,7 +302,7 @@ def test_internet_endpoints_via_explicit_proxy(name: str, endpoint: Endpoint):
 @pytest.mark.parametrize(("name", "endpoint"), _INTERNET_ENDPOINTS)
 def test_internet_endpoints_via_ambient_proxy(name: str, endpoint: Endpoint):
     with (
-        temp_env_vars(HTTPS_PROXY="http://localhost:8019"),
+        temp_env_vars(HTTPS_PROXY=LOCAL_HTTPS_PROXY_URL),
         pytest.raises((RequestsConnectionError, SSLError)) as err,
         MeshClient(endpoint, "BADUSERNAME", "BADPASSWORD", cert=(MOCK_CERT, MOCK_KEY)) as client,
     ):

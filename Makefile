@@ -75,14 +75,18 @@ ruff-ci:
 
 lint: ruff mypy shellcheck
 
-clean:
+clean: down
 	rm -rf ./dist || true
+	rm -rf ./tox || true
+	rm -rf ./Mesh_Client.egg-info || true
+	rm -rf ./.venv || true
 	rm -rf ./reports || true
 	rm -f .docker.env || true
 	find . -type d -name '.mypy_cache' | xargs rm -rf || true
 	find . -type d -name '.pytest_cache' | xargs rm -rf || true
 	find . -type d -name '__pycache__' | xargs rm -rf || true
 	find . -type f -name '.coverage' | xargs rm -rf || true
+	find tests -type f -name '*.pem' | xargs rm -rf || true
 
 purge: clean
 	rm -rf .venv || true

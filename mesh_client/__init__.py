@@ -222,7 +222,7 @@ class MeshRetry(Retry):
         _stacktrace: Optional[TracebackType] = None,
     ) -> "MeshRetry":
         if method != "POST" or not url or not url.endswith("/outbox"):
-            return super().increment(method, url, response, error, _pool, _stacktrace)
+            return cast(MeshRetry, super().increment(method, url, response, error, _pool, _stacktrace))
 
         if error:
             raise reraise(type(error), error, _stacktrace)
@@ -724,7 +724,7 @@ class MeshClient:
                         compressed, checksum, partner_id, content_type
 
         Returns:
-            Response: raw http response
+            message_id: string
         """
 
         compress = self._transparent_compress if compress is None else compress

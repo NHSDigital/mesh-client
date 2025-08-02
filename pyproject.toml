@@ -26,13 +26,13 @@ classifiers = [
 
 [tool.poetry.dependencies]
 # core dependencies
-python = ">=3.9"
+python = ">=3.9,<3.14.0"
 urllib3 = ">=1.25.4"
-requests = [{version = ">=2.26.0", markers = "python_version<'3.8'"},{version = ">=2.32.0", markers = "python_version>='3.8'"}]
-werkzeug = [{version = ">2.0.0", markers = "python_version<'3.8'"},{version = ">=3.0.3", markers = "python_version>='3.8'"}]
+requests = ">=2.32.0,<3.0.0"
+werkzeug = ">=3.0.3,<4.0.0"
 
 [tool.poetry.group.dev.dependencies]
-black = [{version = ">=23.0.0", markers = "python_version<'3.8'"},{version = ">=24.0.0", markers = "python_version>='3.8'"}]
+black = "^25"
 mypy = "^1.4.1"
 types-six = "^1.16.21.8"
 types-requests = "^2.31.0.1"
@@ -41,17 +41,16 @@ mock = "^5.0.2"
 build = "^1.0.3"
 toml = "^0.10.2"
 tox = "^4.6.3"
-types-setuptools = {version = "^73.0.0.20240822", python = ">=3.8"}
+types-setuptools = "^80"
 coverage = "^7.2.7"
 pytest = "^7.4.0"
 importlib-metadata = {version = ">=4.11.4", python = "<3.12"}
-pytest-httpserver = {version = "^1.0.8", python = ">=3.8,<4.0"}
+pytest-httpserver = "^1.0.8"
 ruff = "^0"
 boto3 = "^1.33.7"
 
 [tool.poetry.group.local.dependencies]
-ipython = {version = "^8.14.0", python = ">=3.9,<4.0"}
-
+ipython = "^8.14.0"
 
 [tool.ruff]
 lint.select = [
@@ -106,9 +105,6 @@ include = '\.pyi?$'
 #  | profiling
 #)/
 #'''
-
-
-
 
 [tool.coverage.run]
 branch = true

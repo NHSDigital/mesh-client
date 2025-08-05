@@ -1,10 +1,9 @@
-version: '3.9'
 
 services:
 
   mesh_sandbox:
     build:
-      context: https://github.com/NHSDigital/mesh-sandbox.git#refs/tags/v1.0.13
+      context: https://github.com/NHSDigital/mesh-sandbox.git#refs/tags/v1.0.27
     ports:
       - "8701:443"
     deploy:

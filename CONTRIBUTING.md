@@ -103,11 +103,3 @@ You can check for secrets / test patterns at any time though with
 ```shell
 make check-secrets-all
 ```
-
-## Supporting multiple versions of dependencies
-
-Currently we still support version python 3.7 for the mesh-client but as some packages now have vulnerabilities that are only fixed in higher versions of python we must support multiple versions of the packages. As we use setuptools we have a defined way of doing this in `setup.py` which means packages in the `pyproject.toml` for multiple versions should be defined as a list of dictionaries with the keys of `version` and `markers` as so:
-
-```toml
-requests = [{version = ">=2.26.0", markers = "python_version<'3.8'"},{version = ">=2.32.0", markers = "python_version>='3.8'"}]
-```

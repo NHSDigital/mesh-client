@@ -1,7 +1,8 @@
 import contextlib
 import json
 import os
-from typing import Mapping, Optional
+from collections.abc import Mapping
+from typing import Optional
 
 from werkzeug import Response
 
@@ -16,8 +17,8 @@ MOCK_SSL_OPTS = {"verify": MOCK_CA_CERT, "cert": (MOCK_CERT, MOCK_KEY)}
 """
 Usable default values for verify and cert, providing certificates and keys
 which should work with mock_server. Note that these certs will not work with
-any NHS Digital test environments - such certs must be obtained from
-NHS Digital.
+any NHS England test environments - such certs must be obtained from
+NHS England.
 """
 default_ssl_opts = MOCK_SSL_OPTS
 

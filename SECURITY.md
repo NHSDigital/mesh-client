@@ -1,6 +1,6 @@
 # Security
 
-NHS Digital takes security and the protection of private data extremely
+NHS England takes security and the protection of private data extremely
 seriously. If you believe you have found a vulnerability or other issue which
 has compromised or could compromise the security of any of our systems and/or
 private data managed by our systems, please do not hesitate to contact us using
@@ -25,7 +25,7 @@ Programme, you can report directly to us at: https://hackerone.com/nhs
 
 ### NCSC
 You can send your report to the National Cyber Security Centre, who will assess
-your report and pass it on to NHS Digital if necessary.
+your report and pass it on to NHS England if necessary.
 
 You can report vulnerabilities here:
 https://www.ncsc.gov.uk/information/vulnerability-reporting

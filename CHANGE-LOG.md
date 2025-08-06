@@ -4,6 +4,11 @@ Release Notes
 These are not all encompassing, but we will try and capture noteable differences here.
 
 ----
+
+# 4.0
+* drop support for Python 3.7 and 3.8 which are now [EOL](https://devguide.python.org/versions/#status-of-python-versions)
+* add support for Python 3.12 and 3.13
+
 # 3.1
 * expose a `send_chunk` method which will return the bare http response, but will still take care of some of the messier header negotiation
 * support for alternative names for optional send headers

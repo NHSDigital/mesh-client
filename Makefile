@@ -49,10 +49,10 @@ delete-hooks:
 refresh-hooks: delete-hooks .git/hooks/pre-commit .git/hooks/commit-msg
 
 install:
-	poetry install --sync
+	poetry sync
 
 install-ci:
-	poetry install --without local --sync
+	poetry sync --without local
 
 update:
 	poetry update
@@ -75,14 +75,18 @@ ruff-ci:
 
 lint: ruff mypy shellcheck
 
-clean:
+clean: down
 	rm -rf ./dist || true
+	rm -rf ./tox || true
+	rm -rf ./Mesh_Client.egg-info || true
+	rm -rf ./.venv || true
 	rm -rf ./reports || true
 	rm -f .docker.env || true
 	find . -type d -name '.mypy_cache' | xargs rm -rf || true
 	find . -type d -name '.pytest_cache' | xargs rm -rf || true
 	find . -type d -name '__pycache__' | xargs rm -rf || true
 	find . -type f -name '.coverage' | xargs rm -rf || true
+	find tests -type f -name '*.pem' | xargs rm -rf || true
 
 purge: clean
 	rm -rf .venv || true
@@ -92,7 +96,6 @@ black-check:
 
 black:
 	poetry run black .
-
 
 coverage-cleanup:
 	rm -f .coverage* || true
@@ -121,7 +124,7 @@ tox:
 down:
 	docker compose down --remove-orphans || true
 
-up:
+up: create-test-certs-keys
 	docker compose up -d --remove-orphans --build
 
 coverage-ci: coverage-cleanup coverage-ci-test coverage-report
@@ -134,3 +137,6 @@ check-secrets-all:
 
 export-requirements:
 	poetry export --only main -f requirements.txt --output ./requirements.txt
+
+create-test-certs-keys:
+	./scripts/create-test-certs-keys.sh

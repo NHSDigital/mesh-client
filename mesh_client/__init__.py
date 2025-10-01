@@ -957,7 +957,7 @@ class _BaseMessage:
                 header_value = header_value.upper() in ["Y", "TRUE"]
 
             setattr(self, attribute, header_value)
-        chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
+        _chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
 
         if not hasattr(self, "content_type") or not self.content_type:  # type: ignore[has-type]
             # try and get content_type from Mex-Content-Type first, but fallback to request content type if not set

@@ -27,7 +27,7 @@ classifiers = [
 [tool.poetry.dependencies]
 # core dependencies
 python = ">=3.9,<3.14.0"
-urllib3 = ">=1.25.4"
+urllib3 = ">=1.25.4" # we could remove this, but it wouldn't matter because for Python <3.10, botocore still enforces urllib3 <1.27 (see lock file)
 requests = ">=2.32.0,<3.0.0"
 werkzeug = ">=3.0.3,<4.0.0"
 

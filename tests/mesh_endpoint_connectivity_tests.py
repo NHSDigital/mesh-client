@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import pytest
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import HTTPError, SSLError
+from urllib3.exceptions import ProxyError
 
 import mesh_client
 from mesh_client import DEPRECATED_HSCN_INT_ENDPOINT, Endpoint, MeshClient
@@ -295,7 +296,7 @@ def test_internet_endpoints_via_explicit_proxy(name: str, endpoint: Endpoint):
     if err.type == SSLError:
         assert isinstance(err.value.args[0].reason.args[0], SSLCertVerificationError)
     else:
-        assert err.value.args[0].reason.args[0] == UNABLE_TO_CONNECT_TO_PROXY
+        assert isinstance(err.value.args[0].reason, ProxyError)
         assert str(err.value.args[0].reason.args[1]) == REMOTE_END_CLOSED_CONNECTION
 
 
@@ -311,5 +312,5 @@ def test_internet_endpoints_via_ambient_proxy(name: str, endpoint: Endpoint):
     if err.type == SSLError:
         assert isinstance(err.value.args[0].reason.args[0], SSLCertVerificationError)
     else:
-        assert err.value.args[0].reason.args[0] == UNABLE_TO_CONNECT_TO_PROXY
+        assert isinstance(err.value.args[0].reason, ProxyError)
         assert str(err.value.args[0].reason.args[1]) == REMOTE_END_CLOSED_CONNECTION

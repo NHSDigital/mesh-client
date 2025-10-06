@@ -32,7 +32,7 @@ _HSCN_ENDPOINTS = [(name, endpoint) for name, endpoint in _ENDPOINTS if name.sta
 
 CONNECTION_ABORTED_ERROR = "Connection aborted."
 REMOTE_END_CLOSED_CONNECTION = "Remote end closed connection without response"
-UNABLE_TO_CONNECT_TO_PROXY = "Unable to connect to proxy"
+UNABLE_TO_CONNECT_TO_PROXY = "Cannot connect to proxy."
 SSL_CERTIFICATE_ERROR = "SSL certificate error"
 LOCAL_HTTPS_PROXY_URL = "http://localhost:8019"
 

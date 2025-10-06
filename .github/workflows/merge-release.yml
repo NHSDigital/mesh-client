@@ -11,7 +11,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]'
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -21,12 +21,12 @@ jobs:
           find . -type f | xargs chmod g+w
 
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
           poetry-version: 2.1.3
 

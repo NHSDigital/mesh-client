@@ -27,7 +27,7 @@ classifiers = [
 [tool.poetry.dependencies]
 # core dependencies
 python = ">=3.9,<3.14.0"
-urllib3 = ">=1.25.4"
+urllib3 = ">=1.25.4" # note that we still support Python 3.9, and botocore enforces urllib3 <1.27 for Python <3.10 (see lock file)
 requests = ">=2.32.0,<3.0.0"
 werkzeug = ">=3.0.3,<4.0.0"
 
@@ -43,7 +43,7 @@ toml = "^0.10.2"
 tox = "^4.6.3"
 types-setuptools = "^80"
 coverage = "^7.2.7"
-pytest = "^7.4.0"
+pytest = ">=7.4,<9.0"
 importlib-metadata = {version = ">=4.11.4", python = "<3.12"}
 pytest-httpserver = "^1.0.8"
 ruff = "^0"

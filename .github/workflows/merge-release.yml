@@ -26,7 +26,7 @@ jobs:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v4
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
         with:
           poetry-version: 2.1.3
 

@@ -21,7 +21,7 @@ jobs:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v4
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
         with:
           poetry-version: 2.1.3
 
@@ -83,7 +83,7 @@ jobs:
 
       - name: publish junit reports
         if: success() || failure()
-        uses: mikepenz/action-junit-report@v5
+        uses: mikepenz/action-junit-report@5b7ee5a21e8674b695313d769f3cbdfd5d4d53a4
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml

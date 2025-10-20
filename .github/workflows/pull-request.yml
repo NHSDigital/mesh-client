@@ -35,7 +35,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
+          echo "pr branch ${GITHUB_HEAD_REF}"
           git checkout "${{ github.base_ref }}"
           git checkout -b "merging-${{ github.event.number }}"
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
@@ -87,7 +87,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
+          echo "pr branch ${GITHUB_HEAD_REF}"
           git checkout "${{ github.base_ref }}"
           git checkout -b "merging-${{ github.event.number }}"
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
@@ -98,7 +98,7 @@ jobs:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v4
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
         with:
           poetry-version: 2.1.3
 
@@ -176,7 +176,7 @@ jobs:
 
       - name: publish junit reports
         if: success() || failure()
-        uses: mikepenz/action-junit-report@v5
+        uses: mikepenz/action-junit-report@5b7ee5a21e8674b695313d769f3cbdfd5d4d53a4
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml
@@ -205,7 +205,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
+          echo "pr branch ${GITHUB_HEAD_REF}"
           git checkout "${{ github.base_ref }}"
           git checkout -b "merging-${{ github.event.number }}"
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
@@ -216,7 +216,7 @@ jobs:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v4
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
         with:
           poetry-version: 2.1.3
 
@@ -247,7 +247,7 @@ jobs:
         run: make mypy
 
       - name: shellcheck
-        uses: ludeeus/action-shellcheck@master
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38
         with:
           ignore_paths: .venv build
           ignore_names: git-secrets
@@ -290,7 +290,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
+          echo "pr branch ${GITHUB_HEAD_REF}"
           git checkout "${{ github.base_ref }}"
           git checkout -b "merging-${{ github.event.number }}"
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
@@ -301,7 +301,7 @@ jobs:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v4
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
         with:
           poetry-version: 2.1.3
 
@@ -323,7 +323,7 @@ jobs:
           ls -l dist
 
       - name: test publish
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e
         with:
           password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository-url: https://test.pypi.org/legacy/

@@ -304,8 +304,8 @@ class MeshClient:
     transparently.
     """
 
-    def __init__(  # noqa: C901
-        self,
+    def __init__(  # NOSONAR(S3776) # noqa: C901
+        self,  # NOSONAR(S107)
         url: Union[str, Endpoint],
         mailbox: str,
         password: str,
@@ -570,7 +570,7 @@ class MeshClient:
         return response
 
     @staticmethod
-    def _headers_for_chunk(
+    def _headers_for_chunk(  # NOSONAR(S3776)
         recipient: str, chunk_num: int, total_chunks: int, compress: bool, **kwargs
     ) -> dict[str, str]:
         if chunk_num > 1:
@@ -1070,7 +1070,7 @@ class AuthTokenGenerator:
             return token
 
     def generate_token(self) -> str:
-        now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M")
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M")
         public_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{now}"
         private_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{self._password}:{now}"
         myhash = hmac.HMAC(self._key, private_auth_data.encode("ASCII"), sha256).hexdigest()

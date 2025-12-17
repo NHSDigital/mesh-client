@@ -14,3 +14,4 @@ tests/ca.key.pem:[0-9]+:-----(BEGIN|END) RSA PRIVATE KEY-----
 tests/client.key.pem:[0-9]+:-----(BEGIN|END) RSA PRIVATE KEY-----
 tests/server.key.pem:[0-9]+:-----(BEGIN|END) RSA PRIVATE KEY-----
 tests/mailboxes.jsonl:[0-9]+:.*"password": "password"
+test

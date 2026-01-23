@@ -210,7 +210,7 @@ def test_iterate_and_context_manager(alice: MeshClient, bob: MeshClient):
     alice.send_message(bob_mailbox, b"Hello Bob 2", workflow_id=uuid4().hex)
     alice.send_message(bob_mailbox, b"Hello Bob 3", workflow_id=uuid4().hex)
     messages_read = 0
-    for msg, expected in zip(bob.iterate_all_messages(), [b"Hello Bob 2", b"Hello Bob 3"]):
+    for msg, expected in zip(bob.iterate_all_messages(), [b"Hello Bob 2", b"Hello Bob 3"], strict=True):
         with msg:
             assert msg.read() == expected
             messages_read += 1

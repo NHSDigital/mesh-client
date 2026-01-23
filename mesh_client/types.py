@@ -1,11 +1,11 @@
-from typing import Literal, Optional, TypedDict
+from typing import Literal, TypedDict
 
 # https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/endpointlookup/-ods_code-/-workflow_id-
 
 
 class EndpointLookupItem_v1(TypedDict):
     address: str
-    description: Optional[str]
+    description: str | None
     endpoint_type: Literal["MESH"]
 
 
@@ -16,7 +16,7 @@ class EndpointLookupResponse_v1(TypedDict):
 
 class EndpointLookupItem_v2(TypedDict):
     mailbox_id: str
-    mailbox_name: Optional[str]
+    mailbox_name: str | None
 
 
 class EndpointLookupResponse_v2(TypedDict):
@@ -50,69 +50,69 @@ class AcknowledgeMessageResponse_v1(TypedDict):
 
 # https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/outbox/tracking/-local_id-
 class TrackingResponse_v1(TypedDict):
-    addressType: Optional[str]
-    checksum: Optional[str]
-    chunkCount: Optional[int]
-    compressFlag: Optional[str]
-    contentEncoding: Optional[str]
-    downloadTimestamp: Optional[str]
+    addressType: str | None
+    checksum: str | None
+    chunkCount: int | None
+    compressFlag: str | None
+    contentEncoding: str | None
+    downloadTimestamp: str | None
     dtsId: str
-    encryptedFlag: Optional[str]
-    expiryTime: Optional[str]
-    failureDate: Optional[str]
-    failureDiagnostic: Optional[str]
-    fileName: Optional[str]
+    encryptedFlag: str | None
+    expiryTime: str | None
+    failureDate: str | None
+    failureDiagnostic: str | None
+    fileName: str | None
     fileSize: int
 
-    isCompressed: Optional[str]
-    linkedMsgId: Optional[str]
-    localId: Optional[str]
-    meshRecipientOdsCode: Optional[str]
+    isCompressed: str | None
+    linkedMsgId: str | None
+    localId: str | None
+    meshRecipientOdsCode: str | None
     messageId: str
-    messageType: Optional[str]
-    partnerId: Optional[str]
+    messageType: str | None
+    partnerId: str | None
 
-    recipient: Optional[str]
-    recipientName: Optional[str]
-    recipientOrgCode: Optional[str]
-    recipientOrgName: Optional[str]
-    recipientSmtp: Optional[str]
+    recipient: str | None
+    recipientName: str | None
+    recipientOrgCode: str | None
+    recipientOrgName: str | None
+    recipientSmtp: str | None
 
-    sender: Optional[str]
-    senderName: Optional[str]
-    senderOdsCode: Optional[str]
-    senderOrgCode: Optional[str]
-    senderOrgName: Optional[str]
-    senderSmtp: Optional[str]
+    sender: str | None
+    senderName: str | None
+    senderOdsCode: str | None
+    senderOrgCode: str | None
+    senderOrgName: str | None
+    senderSmtp: str | None
 
-    status: Optional[str]
+    status: str | None
 
-    statusCode: Optional[str]
-    statusDescription: Optional[str]
+    statusCode: str | None
+    statusDescription: str | None
 
 
 # https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#get-/messageexchange/-mailbox_id-/outbox/tracking
 class TrackingResponse_v2(TypedDict):
     message_id: str
-    local_id: Optional[str]
-    workflow_id: Optional[str]
-    filename: Optional[str]
+    local_id: str | None
+    workflow_id: str | None
+    filename: str | None
 
-    expiry_time: Optional[str]
-    upload_timestamp: Optional[str]
+    expiry_time: str | None
+    upload_timestamp: str | None
 
-    recipient: Optional[str]
-    recipient_name: Optional[str]
-    recipient_ods_code: Optional[str]
-    recipient_org_code: Optional[str]
-    recipient_org_name: Optional[str]
+    recipient: str | None
+    recipient_name: str | None
+    recipient_ods_code: str | None
+    recipient_org_code: str | None
+    recipient_org_name: str | None
 
-    status_success: Optional[bool]
-    status: Optional[str]
-    status_event: Optional[str]
-    status_timestamp: Optional[str]
-    status_description: Optional[str]
-    status_code: Optional[str]
+    status_success: bool | None
+    status: str | None
+    status_event: str | None
+    status_timestamp: str | None
+    status_description: str | None
+    status_code: str | None
 
 
 # https://digital.nhs.uk/developer/api-catalogue/message-exchange-for-social-care-and-health-api#post-/messageexchange/-mailbox_id-/outbox
@@ -125,13 +125,13 @@ class SendMessageResponse_v2(TypedDict):
 
 
 class SendMessageErrorResponse_v1(TypedDict):
-    messageID: Optional[str]
-    errorEvent: Optional[str]
-    errorCode: Optional[str]
-    errorDescription: Optional[str]
+    messageID: str | None
+    errorEvent: str | None
+    errorCode: str | None
+    errorDescription: str | None
 
 
 class SendMessageErrorResponse_v2(TypedDict):
-    message_id: Optional[str]
-    internal_id: Optional[str]
+    message_id: str | None
+    internal_id: str | None
     detail: list[dict]

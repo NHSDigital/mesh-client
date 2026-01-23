@@ -9,13 +9,13 @@ jobs:
   tox:
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     runs-on: ubuntu-latest
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -35,13 +35,13 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
+          echo "pr branch ${GITHUB_HEAD_REF}"
           git checkout "${{ github.base_ref }}"
           git checkout -b "merging-${{ github.event.number }}"
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -64,7 +64,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -87,18 +87,18 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
+          echo "pr branch ${GITHUB_HEAD_REF}"
           git checkout "${{ github.base_ref }}"
           git checkout -b "merging-${{ github.event.number }}"
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
         with:
           poetry-version: 2.1.3
 
@@ -138,7 +138,7 @@ jobs:
 
       - name: setup java
         if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "corretto"
           java-version: "17"
@@ -147,7 +147,7 @@ jobs:
         if: github.actor != 'dependabot[bot]' && (success() || failure())
         run: |
           export SONAR_VERSION="5.0.1.3006"
-          wget -q "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
+          wget -q --max-redirect=0 "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
           unzip -q ./sonar-scanner.zip
           mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
           scripts/sonar_tests.py
@@ -169,14 +169,14 @@ jobs:
 
       - name: archive reports
         if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: reports
           path: reports/**/*
 
       - name: publish junit reports
         if: success() || failure()
-        uses: mikepenz/action-junit-report@v5
+        uses: mikepenz/action-junit-report@e08919a3b1fb83a78393dfb775a9c37f17d8eea6
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml
@@ -190,7 +190,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -205,18 +205,18 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
+          echo "pr branch ${GITHUB_HEAD_REF}"
           git checkout "${{ github.base_ref }}"
           git checkout -b "merging-${{ github.event.number }}"
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
         with:
           poetry-version: 2.1.3
 
@@ -247,7 +247,7 @@ jobs:
         run: make mypy
 
       - name: shellcheck
-        uses: ludeeus/action-shellcheck@master
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38
         with:
           ignore_paths: .venv build
           ignore_names: git-secrets
@@ -270,7 +270,7 @@ jobs:
       - tox
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -290,18 +290,18 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           echo base branch "${{ github.base_ref }}"
-          echo pr branch "${{ github.head_ref }}"
+          echo "pr branch ${GITHUB_HEAD_REF}"
           git checkout "${{ github.base_ref }}"
           git checkout -b "merging-${{ github.event.number }}"
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
         with:
           poetry-version: 2.1.3
 
@@ -323,7 +323,7 @@ jobs:
           ls -l dist
 
       - name: test publish
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e
         with:
           password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository-url: https://test.pypi.org/legacy/

@@ -2,7 +2,6 @@ import contextlib
 import json
 import os
 from collections.abc import Mapping
-from typing import Optional
 
 from werkzeug import Response
 
@@ -50,7 +49,7 @@ def json_response(
     response: dict,
     status: int = 200,
     content_type: str = "application/vnd.mesh.v2+json",
-    headers: Optional[Mapping[str, str]] = None,
+    headers: Mapping[str, str] | None = None,
 ) -> Response:
     return Response(response=json.dumps(response), status=status, content_type=content_type, headers=headers)
 
@@ -59,12 +58,12 @@ def bytes_response(
     response: bytes,
     status: int = 200,
     content_type: str = "application/octet-stream",
-    headers: Optional[Mapping[str, str]] = None,
+    headers: Mapping[str, str] | None = None,
 ) -> Response:
     return Response(response=response, status=status, content_type=content_type, headers=headers)
 
 
 def plain_response(
-    response: str, status: int = 200, content_type: str = "text/plain", headers: Optional[Mapping[str, str]] = None
+    response: str, status: int = 200, content_type: str = "text/plain", headers: Mapping[str, str] | None = None
 ) -> Response:
     return Response(response=response, status=status, content_type=content_type, headers=headers)

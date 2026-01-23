@@ -16,7 +16,7 @@ from hashlib import sha256
 from io import BytesIO
 from itertools import chain
 from types import TracebackType
-from typing import Any, NoReturn, Optional, TypeVar, Union, cast
+from typing import Any, NoReturn, TypeVar, cast
 from urllib.parse import quote as q
 from urllib.parse import urlparse
 
@@ -46,9 +46,9 @@ from .types import (
     TrackingResponse_v2,
 )
 
-if sys.version_info[:2] < (3, 9):  # noqa: UP036
+if sys.version_info[:2] < (3, 10):  # noqa: UP036
     warnings.warn(
-        "python versions < 3.9 are end of life and no longer supported as of mesh-client v4",
+        "python versions < 3.10 are end of life and no longer supported.",
         category=DeprecationWarning,
         stacklevel=2,
     )
@@ -136,9 +136,9 @@ _HOSTNAME_ENDPOINT_MAP = {urlparse(ep.url).hostname: ep for name, ep in ENDPOINT
 
 # urllib3 'futures' ( not part of 1.26 .. but available in  2.x )
 def reraise(
-    tp: Optional[type[BaseException]],
+    tp: type[BaseException] | None,
     value: BaseException,
-    tb: Optional[TracebackType] = None,
+    tb: TracebackType | None = None,
 ) -> NoReturn:
     try:
         if value.__traceback__ is not tb:
@@ -149,7 +149,7 @@ def reraise(
         tb = None
 
 
-def try_get_endpoint_from_url(url: str) -> Optional[Endpoint]:
+def try_get_endpoint_from_url(url: str) -> Endpoint | None:
     url_parsed = urlparse(url)
     if not url_parsed.hostname:
         return None
@@ -195,7 +195,7 @@ def _looks_like_send_error(status_code: int, response_dict: dict) -> bool:
 
 def _get_send_error_message(
     response_dict: dict,
-) -> tuple[str, Union[SendMessageErrorResponse_v1, SendMessageErrorResponse_v2, dict]]:
+) -> tuple[str, SendMessageErrorResponse_v1 | SendMessageErrorResponse_v2 | dict]:
     if "errorDescription" in response_dict:
         return response_dict["errorDescription"], cast(SendMessageErrorResponse_v1, response_dict)
 
@@ -214,12 +214,12 @@ class MeshRetry(Retry):
 
     def increment(
         self,
-        method: Optional[str] = None,
-        url: Optional[str] = None,
+        method: str | None = None,
+        url: str | None = None,
         response=None,
-        error: Optional[Exception] = None,
-        _pool: Optional[ConnectionPool] = None,
-        _stacktrace: Optional[TracebackType] = None,
+        error: Exception | None = None,
+        _pool: ConnectionPool | None = None,
+        _stacktrace: TracebackType | None = None,
     ) -> "MeshRetry":
         if method != "POST" or not url or not url.endswith("/outbox"):
             return cast(MeshRetry, super().increment(method, url, response, error, _pool, _stacktrace))
@@ -243,11 +243,11 @@ class MeshRetry(Retry):
 class SSLContextAdapter(HTTPAdapter):
     def __init__(
         self,
-        cert: Optional[Union[tuple[str], tuple[str, str], tuple[str, str, str]]] = None,
-        verify: Optional[Union[str, bool]] = None,
-        check_hostname: Optional[bool] = None,
-        hostname_checks_common_name: Optional[bool] = None,
-        max_retries: Union[int, Retry] = 0,
+        cert: tuple[str] | tuple[str, str] | tuple[str, str, str] | None = None,
+        verify: str | bool | None = None,
+        check_hostname: bool | None = None,
+        hostname_checks_common_name: bool | None = None,
+        max_retries: int | Retry = 0,
     ):
         self.cert = cert
         self.verify = verify
@@ -304,25 +304,25 @@ class MeshClient:
     transparently.
     """
 
-    def __init__(  # noqa: C901
-        self,
-        url: Union[str, Endpoint],
+    def __init__(  # NOSONAR(S3776) # noqa: C901
+        self,  # NOSONAR(S107)
+        url: str | Endpoint,
         mailbox: str,
         password: str,
-        shared_key: Optional[bytes] = None,
-        cert: Optional[Union[tuple[str], tuple[str, str], tuple[str, str, str]]] = None,
-        verify: Optional[Union[str, bool]] = None,
-        check_hostname: Optional[bool] = None,
-        hostname_checks_common_name: Optional[bool] = None,
+        shared_key: bytes | None = None,
+        cert: tuple[str] | tuple[str, str] | tuple[str, str, str] | None = None,
+        verify: str | bool | None = None,
+        check_hostname: bool | None = None,
+        hostname_checks_common_name: bool | None = None,
         max_chunk_size=75 * 1024 * 1024,
-        proxies: Optional[dict[str, str]] = None,
+        proxies: dict[str, str] | None = None,
         transparent_compress: bool = False,
-        max_retries: Union[int, Retry] = 3,
-        retry_backoff_factor: Union[int, float] = 0.5,
+        max_retries: int | Retry = 3,
+        retry_backoff_factor: int | float = 0.5,
         retry_status_force_list: tuple[int, ...] = (425, 429, 502, 503, 504),
         retry_methods: tuple[str, ...] = ("HEAD", "GET", "PUT", "POST", "DELETE", "OPTIONS", "TRACE"),
-        timeout: Union[int, float] = 10 * 60,
-        application_name: Optional[str] = None,
+        timeout: int | float = 10 * 60,
+        application_name: str | None = None,
     ):
         """
         Create a new MeshClient.
@@ -388,7 +388,7 @@ class MeshClient:
 
         url_lower = self._url.lower()
 
-        self._retries: Union[int, Retry] = 0
+        self._retries: int | Retry = 0
         if isinstance(max_retries, Retry):
             self._retries = max_retries
         elif max_retries:
@@ -498,16 +498,14 @@ class MeshClient:
         response.raise_for_status()
         return cast(EndpointLookupResponse_v2, response.json())
 
-    def _inbox_v2_page(
-        self, url: Optional[str] = None, params: Optional[dict[str, Any]] = None
-    ) -> ListMessageResponse_v2:
+    def _inbox_v2_page(self, url: str | None = None, params: dict[str, Any] | None = None) -> ListMessageResponse_v2:
         url = url or f"{self.mailbox_url}/inbox"
         response = self._session.get(url, timeout=self._timeout, params=params)
         response.raise_for_status()
 
         return cast(ListMessageResponse_v2, response.json())
 
-    def list_messages(self, max_results: Optional[int] = None, workflow_filter: Optional[str] = None) -> list[str]:
+    def list_messages(self, max_results: int | None = None, workflow_filter: str | None = None) -> list[str]:
         """
             lists messages ids in the inbox; note if workflow_filter is set  it's possible to receive an empty page
             when more results exist outside the first max_results
@@ -521,7 +519,7 @@ class MeshClient:
             list[str]: message ids
         """
 
-        params: dict[str, Union[str, int]] = {}
+        params: dict[str, str | int] = {}
         if max_results:
             if max_results < 10:
                 raise ValueError("if set max_results should be >= 10")
@@ -570,7 +568,7 @@ class MeshClient:
         return response
 
     @staticmethod
-    def _headers_for_chunk(
+    def _headers_for_chunk(  # NOSONAR(S3776)
         recipient: str, chunk_num: int, total_chunks: int, compress: bool, **kwargs
     ) -> dict[str, str]:
         if chunk_num > 1:
@@ -617,8 +615,8 @@ class MeshClient:
         chunk,
         chunk_num: int,
         total_chunks: int,
-        compress: Optional[bool] = None,
-        message_id: Optional[str] = None,
+        compress: bool | None = None,
+        message_id: str | None = None,
         **kwargs,
     ) -> Response:
         """
@@ -690,8 +688,8 @@ class MeshClient:
         self,
         recipient: str,
         data,
-        max_chunk_size: Optional[int] = None,
-        compress: Optional[bool] = None,
+        max_chunk_size: int | None = None,
+        compress: bool | None = None,
         **kwargs,
     ) -> str:
         """
@@ -779,7 +777,7 @@ class MeshClient:
         response.raise_for_status()
 
     def iterate_message_ids(
-        self, workflow_filter: Optional[str] = None, batch_size: Optional[int] = None
+        self, workflow_filter: str | None = None, batch_size: int | None = None
     ) -> Generator[str, None, None]:
         """
             generator lists messages ids in the inbox;
@@ -793,7 +791,7 @@ class MeshClient:
             Generator[str]: message ids
         """
 
-        params: dict[str, Union[int, str]] = {}
+        params: dict[str, int | str] = {}
         if batch_size:
             if batch_size < 10:
                 raise ValueError("if set batch_size should be >= 10")
@@ -802,7 +800,7 @@ class MeshClient:
         if workflow_filter:
             params["workflow_filter"] = workflow_filter
 
-        def _next_messages(page_result: ListMessageResponse_v2) -> tuple[Optional[str], list[str]]:
+        def _next_messages(page_result: ListMessageResponse_v2) -> tuple[str | None, list[str]]:
             return cast(dict[str, str], page_result.get("links", {})).get("next"), cast(
                 list[str], page_result.get("messages", [])
             )
@@ -815,7 +813,7 @@ class MeshClient:
             next_page, messages = _next_messages(result)
             yield from messages
 
-    def iterate_messages(self, workflow_filter: Optional[str] = None, batch_size: Optional[int] = None):
+    def iterate_messages(self, workflow_filter: str | None = None, batch_size: int | None = None):
         """
             generator lists messages ids in the inbox;
             Iterate over a list of Message objects for all messages in the user's
@@ -886,17 +884,17 @@ class _MessageAttrs:
     message_type: str
     recipient: str
     content_type: str
-    sender: Optional[str] = None
+    sender: str | None = None
 
-    workflow_id: Optional[str] = None
-    filename: Optional[str] = None
-    local_id: Optional[str] = None
-    partner_id: Optional[str] = None
-    chunk_range: Optional[str] = None
+    workflow_id: str | None = None
+    filename: str | None = None
+    local_id: str | None = None
+    partner_id: str | None = None
+    chunk_range: str | None = None
 
-    subject: Optional[str] = None
-    encrypted: Optional[Union[str, bool]] = None
-    compressed: Optional[Union[str, bool]] = None
+    subject: str | None = None
+    encrypted: str | bool | None = None
+    compressed: str | bool | None = None
 
 
 TDefault = TypeVar("TDefault")
@@ -957,7 +955,7 @@ class _BaseMessage:
                 header_value = header_value.upper() in ["Y", "TRUE"]
 
             setattr(self, attribute, header_value)
-        chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
+        _chunk, chunk_count = map(int, headers.get("Mex-Chunk-Range", "1:1").split(":"))
 
         if not hasattr(self, "content_type") or not self.content_type:  # type: ignore[has-type]
             # try and get content_type from Mex-Content-Type first, but fallback to request content type if not set
@@ -1014,7 +1012,7 @@ class _BaseMessage:
         """
         self._client.acknowledge_message(self._msg_id)
 
-    def mex_header(self, key: str, default: Optional[TDefault] = None) -> Union[str, Optional[TDefault]]:
+    def mex_header(self, key: str, default: TDefault | None = None) -> str | TDefault | None:
         """get a mex header if present
 
         Args:
@@ -1070,7 +1068,7 @@ class AuthTokenGenerator:
             return token
 
     def generate_token(self) -> str:
-        now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M")
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M")
         public_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{now}"
         private_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{self._password}:{now}"
         myhash = hmac.HMAC(self._key, private_auth_data.encode("ASCII"), sha256).hexdigest()

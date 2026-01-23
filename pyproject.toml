@@ -10,11 +10,11 @@ packages = [
 ]
 readme = "README.md"
 classifiers = [
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 # including this would turn on pyproject.toml for setuptools and fail validation
@@ -26,8 +26,8 @@ classifiers = [
 
 [tool.poetry.dependencies]
 # core dependencies
-python = ">=3.9,<3.14.0"
-urllib3 = ">=1.25.4" # note that we still support Python 3.9, and botocore enforces urllib3 <1.27 for Python <3.10 (see lock file)
+python = ">=3.10,<3.15.0"
+urllib3 = ">=1.25.4"
 requests = ">=2.32.0,<3.0.0"
 werkzeug = ">=3.0.3,<4.0.0"
 
@@ -84,7 +84,7 @@ exclude = [
 ]
 lint.unfixable = ["SIM112"]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 
 
 [tool.pytest.ini_options]
@@ -95,7 +95,7 @@ norecursedirs = ".git .venv .eggs build dist terraform features"
 
 [tool.black]
 line-length = 120
-target-version = ['py39']
+target-version = ['py310']
 include = '\.pyi?$'
 #extend-exclude = '''
 #/(
@@ -147,7 +147,7 @@ show_missing = true
 output = "reports/coverage.xml"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 show_error_codes = true

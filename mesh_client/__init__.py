@@ -46,9 +46,9 @@ from .types import (
     TrackingResponse_v2,
 )
 
-if sys.version_info[:2] < (3, 9):  # noqa: UP036
+if sys.version_info[:2] < (3, 10):  # noqa: UP036
     warnings.warn(
-        "python versions < 3.9 are end of life and no longer supported as of mesh-client v4",
+        "python versions < 3.10 are end of life and no longer supported.",
         category=DeprecationWarning,
         stacklevel=2,
     )

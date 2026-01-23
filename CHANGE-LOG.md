@@ -5,6 +5,10 @@ These are not all encompassing, but we will try and capture noteable differences
 
 ----
 
+# 5.0
+* drop support for Python 3.9 which is now [EOL](https://devguide.python.org/versions/#status-of-python-versions)
+* add support for Python 3.14
+
 # 4.0
 * drop support for Python 3.7 and 3.8 which are now [EOL](https://devguide.python.org/versions/#status-of-python-versions)
 * add support for Python 3.12 and 3.13

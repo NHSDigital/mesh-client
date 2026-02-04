@@ -3,6 +3,7 @@
 this shim is required ... because the PyPI package name contains upper case chars . and pyproject.toml
 will lowercase under PEP-518 build systems.
 """
+
 import os
 from os.path import dirname, join
 

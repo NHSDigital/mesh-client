@@ -43,7 +43,7 @@ toml = "^0.10.2"
 tox = "^4.6.3"
 types-setuptools = "^80"
 coverage = "^7.2.7"
-pytest = ">=7.4,<9.0"
+pytest = ">=7.4,<10.0"
 importlib-metadata = {version = ">=4.11.4", python = "<3.12"}
 pytest-httpserver = "^1.0.8"
 ruff = "^0"

@@ -1,10 +1,10 @@
 import itertools
 import socket
-from _socket import gaierror
 from ssl import SSLCertVerificationError
 from urllib.parse import urlparse
 
 import pytest
+from _socket import gaierror
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import HTTPError, SSLError
 from urllib3.exceptions import ProxyError

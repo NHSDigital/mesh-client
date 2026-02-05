@@ -261,11 +261,11 @@ class SSLContextAdapter(HTTPAdapter):
 
         context.minimum_version = ssl.TLSVersion.TLSv1_2
 
-        if self.cert and isinstance(self.cert, (tuple, list)):
+        if self.cert and isinstance(self.cert, tuple | list):
             context.load_cert_chain(*self.cert)
 
         if self.verify:
-            if isinstance(self.verify, (str, bytes)):
+            if isinstance(self.verify, str | bytes):
                 context.load_verify_locations(self.verify)
 
             if self.check_hostname is not None:

@@ -22,9 +22,12 @@ class SSLContextStub:
     [
         (("client.crt", "client.key"), True),
         (None, False),
+        (["client.crt", "client.key"], True),
     ],
 )
-def test_create_ssl_context_loads_cert_chain(monkeypatch, certs: tuple[str, str] | None, loads_cert_chain_called: bool):
+def test_create_ssl_context_loads_cert_chain(
+    monkeypatch, certs: tuple[str, str] | list[str] | None, loads_cert_chain_called: bool
+):
 
     dummy_context = SSLContextStub()
     monkeypatch.setattr(mesh_client, "create_urllib3_context", lambda: dummy_context)
@@ -43,8 +46,11 @@ def test_create_ssl_context_loads_cert_chain(monkeypatch, certs: tuple[str, str]
         dummy_context.load_cert_chain.assert_not_called()
 
 
-@pytest.mark.parametrize("verify", [True, False, "/path/to/ca.pem"])
-def test_create_ssl_context_loads_verify_locations_when_verify_is_provided(monkeypatch, verify: bool | str | None):
+@pytest.mark.parametrize("verify", [True, False, "/path/to/ca.pem", b"/path/to/ca.pem", None])
+def test_create_ssl_context_loads_verify_locations_when_verify_is_provided(
+    monkeypatch, verify: bool | str | bytes | None
+):
+
     dummy_context = SSLContextStub()
     monkeypatch.setattr(mesh_client, "create_urllib3_context", lambda: dummy_context)
 
@@ -53,7 +59,7 @@ def test_create_ssl_context_loads_verify_locations_when_verify_is_provided(monke
 
     assert context is dummy_context
 
-    if verify == "/path/to/ca.pem":
+    if type(verify) in (str, bytes):
         dummy_context.load_verify_locations.assert_called_with(verify)
     else:
         dummy_context.load_verify_locations.assert_not_called()

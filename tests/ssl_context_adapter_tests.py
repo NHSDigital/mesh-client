@@ -32,7 +32,7 @@ def test_create_ssl_context_loads_cert_chain(
     dummy_context = SSLContextStub()
     monkeypatch.setattr(mesh_client, "create_urllib3_context", lambda: dummy_context)
 
-    adapter = mesh_client.SSLContextAdapter(cert=certs, verify=None)
+    adapter = mesh_client.SSLContextAdapter(cert=certs, verify=None)  # type: ignore[arg-type]
     dummy_context.load_cert_chain.reset_mock()
 
     context = adapter.create_ssl_context()
@@ -54,7 +54,7 @@ def test_create_ssl_context_loads_verify_locations_when_verify_is_provided(
     dummy_context = SSLContextStub()
     monkeypatch.setattr(mesh_client, "create_urllib3_context", lambda: dummy_context)
 
-    adapter = mesh_client.SSLContextAdapter(cert=None, verify=verify)
+    adapter = mesh_client.SSLContextAdapter(cert=None, verify=verify)  # type: ignore[arg-type]
     context = adapter.create_ssl_context()
 
     assert context is dummy_context

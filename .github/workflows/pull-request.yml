@@ -15,7 +15,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -41,7 +41,7 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -64,7 +64,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -93,7 +93,7 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version-file: 'pyproject.toml'
 
@@ -107,7 +107,7 @@ jobs:
           poetry self add "poetry-dynamic-versioning[plugin]"
 
       - name: cache virtualenv
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .venv
@@ -138,7 +138,7 @@ jobs:
 
       - name: setup java
         if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           distribution: "corretto"
           java-version: "17"
@@ -169,7 +169,7 @@ jobs:
 
       - name: archive reports
         if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: reports
           path: reports/**/*
@@ -190,7 +190,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -211,7 +211,7 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version-file: 'pyproject.toml'
 
@@ -225,7 +225,7 @@ jobs:
           poetry self add "poetry-dynamic-versioning[plugin]"
 
       - name: cache virtualenv
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .venv
@@ -270,7 +270,7 @@ jobs:
       - tox
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -296,7 +296,7 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version-file: 'pyproject.toml'
 

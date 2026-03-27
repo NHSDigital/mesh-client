@@ -11,6 +11,8 @@ updates:
     open-pull-requests-limit: 2
     schedule:
       interval: "monthly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "github actions "
       include: scope
@@ -19,3 +21,5 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "monthly"
+    cooldown:
+      default-days: 7

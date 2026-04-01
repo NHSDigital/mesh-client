@@ -61,6 +61,9 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
@@ -93,6 +96,7 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
+        id: setup-python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version-file: 'pyproject.toml'
@@ -137,14 +141,14 @@ jobs:
           thresholdAll: 0.70
 
       - name: setup java
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
+        if: github.event.pull_request.user.login != 'dependabot[bot]' && (success() || failure())
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           distribution: "corretto"
           java-version: "17"
 
       - name: provision sonar-scanner
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
+        if: github.event.pull_request.user.login != 'dependabot[bot]' && (success() || failure())
         run: |
           export SONAR_VERSION="5.0.1.3006"
           wget -q --max-redirect=0 "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
@@ -153,7 +157,7 @@ jobs:
           scripts/sonar_tests.py
 
       - name: run sonar scan
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
+        if: github.event.pull_request.user.login != 'dependabot[bot]' && (success() || failure())
         run: |
           PATH="$PWD/sonar-scanner/bin:$PATH"
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -168,7 +172,7 @@ jobs:
 
 
       - name: archive reports
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
+        if: github.event.pull_request.user.login != 'dependabot[bot]' && (success() || failure())
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: reports
@@ -211,6 +215,7 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
+        id: setup-python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version-file: 'pyproject.toml'
@@ -263,7 +268,7 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
-    if: github.repository == 'NHSDigital/mesh-client' && github.actor != 'dependabot[bot]'
+    if: github.repository == 'NHSDigital/mesh-client' && github.event.pull_request.user.login != 'dependabot[bot]'
     needs:
       - coverage
       - lint
@@ -341,3 +346,37 @@ jobs:
             echo "${INSTALLED_VERSION} != ${RELEASE_VERSION}"
             exit 1
           fi
+
+  slack-notification:
+    runs-on: ubuntu-latest
+    needs:
+      - coverage
+      - lint
+      - tox
+    if: ${{ always() && github.repository == 'NHSDigital/mesh-client' && github.actor == 'dependabot[bot]' && contains(needs.*.result, 'failure') }}
+    steps:
+      - name: Slack Notification
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a
+        with:
+          webhook: ${{ secrets.DEPENDABOT_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": ":alarm: DEPENDABOT PR FAILED :alarm:",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Checks failed for ${{ github.repository }}:${{ github.ref }} in <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR #${{ github.event.number }}>"
+                  }
+                }
+              ]
+            }

@@ -61,6 +61,9 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
@@ -341,3 +344,37 @@ jobs:
             echo "${INSTALLED_VERSION} != ${RELEASE_VERSION}"
             exit 1
           fi
+
+  slack-notification:
+    runs-on: ubuntu-latest
+    needs:
+      - coverage
+      - lint
+      - tox
+    if: ${{ always() && github.repository == 'NHSDigital/mesh-client' && github.actor == 'dependabot[bot]' && contains(needs.*.result, 'failure') }}
+    steps:
+      - name: Slack Notification
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a
+        with:
+          webhook: ${{ secrets.DEPENDABOT_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": ":alarm: DEPENDABOT PR FAILED :alarm:",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Checks failed for ${{ github.repository }}:${{ github.ref }} in <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR #${{ github.event.number }}>"
+                  }
+                }
+              ]
+            }

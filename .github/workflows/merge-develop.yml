@@ -83,7 +83,7 @@ jobs:
 
       - name: publish junit reports
         if: success() || failure()
-        uses: mikepenz/action-junit-report@bccf2e31636835cf0874589931c4116687171386
+        uses: mikepenz/action-junit-report@bccf2e31636835cf0874589931c4116687171386 # v6.4.0
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml

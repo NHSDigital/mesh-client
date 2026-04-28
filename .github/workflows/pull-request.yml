@@ -140,14 +140,12 @@ jobs:
           thresholdAll: 0.70
 
       - name: setup java
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           distribution: "corretto"
           java-version: "17"
 
       - name: provision sonar-scanner
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
         run: |
           export SONAR_VERSION="5.0.1.3006"
           wget -q --max-redirect=0 "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
@@ -156,7 +154,6 @@ jobs:
           scripts/sonar_tests.py
 
       - name: run sonar scan
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
         run: |
           PATH="$PWD/sonar-scanner/bin:$PATH"
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then

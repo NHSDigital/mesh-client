@@ -5,4 +5,5 @@ poetry.lock
 pyproject.toml
 requirements.txt
 .github/workflows/*.yml
+.github/workflows/*.yaml
 .github/dependabot.*yaml

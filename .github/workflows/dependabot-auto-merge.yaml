@@ -9,6 +9,28 @@ on:
       - ready_for_review
       - labeled
 
+# Intent:
+#   Dependabot PRs should be automatically approved and set to auto-merge.
+#   Auto-merge means GitHub will merge the PR as soon as all required checks pass.
+#
+#   If checks fail and a human intervenes by pushing a fix commit, the auto-approval
+#   should be invalidated - the PR must then be manually reviewed and approved before
+#   it can merge.
+#
+#   If checks fail and a human simply re-runs the workflow (no code change), the PR
+#   should re-approve and re-enable auto-merge on success - the human has decided to
+#   retry the original Dependabot change, so no fresh review is required.
+#
+# How the conditional satisfies this:
+#   `github.actor` is the user who triggered the *original* workflow run. Crucially,
+#   it is preserved across re-runs - if a human re-runs a Dependabot-triggered run,
+#   github.actor remains 'dependabot[bot]', so this job still fires and re-approves.
+#
+#   When a human pushes a commit to the branch, a new 'synchronize' event fires with
+#   github.actor set to that human - this job is skipped, the existing approval is
+#   dismissed by GitHub's branch protection (requires new review after new commits),
+#   and the PR must be manually approved before auto-merge can proceed.
+
 jobs:
   enable-automerge:
     # Only run on Dependabot PRs
@@ -19,19 +41,54 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Generate token from GitHub App
+        id: generate-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.SHARED_MERGE_AND_WRITEBACK_APP_ID }}
+          private-key: ${{ secrets.SHARED_MERGE_AND_WRITEBACK_APP_PRIVATE_KEY }}
       - name: Fetch Dependabot metadata
         id: metadata
-        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 #v3.1.0
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auto-approve Dependabot PR
-        uses: hmarr/auto-approve-action@8f929096a962e83ccdfa8afcf855f39f12d4dac7 # v4
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        uses: hmarr/auto-approve-action@f0939ea97e9205ef24d872e76833fa908a770363 # v4.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Enable auto-merge for Dependabot PRs
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+      - name: Notify Slack of manual review required
+        if: github.event.action == 'opened' && steps.metadata.outputs.update-type != 'version-update:semver-patch' && steps.metadata.outputs.update-type != 'version-update:semver-minor'
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        with:
+          webhook: ${{ secrets.DEPENDABOT_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": ":dependabot: DEPENDABOT UPDATE REQUIRES REVIEW :dependabot:",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "A Dependabot PR in ${{ github.repository }} is not a candidate for auto-merge (update-type: `${{ steps.metadata.outputs.update-type }}`). Manual review required: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR #${{ github.event.number }}>"
+                  }
+                }
+              ]
+            }

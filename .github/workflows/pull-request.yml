@@ -351,7 +351,7 @@ jobs:
     if: ${{ always() && github.repository == 'NHSDigital/mesh-client' && github.actor == 'dependabot[bot]' && contains(needs.*.result, 'failure') }}
     steps:
       - name: Slack Notification
-        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        uses: slackapi/slack-github-action@fc46ded2fc4d7f11bfa62864526f920cf1a1167d # v3.0.4
         with:
           webhook: ${{ secrets.DEPENDABOT_SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook

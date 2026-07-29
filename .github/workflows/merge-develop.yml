@@ -11,7 +11,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client' && !contains(github.event.head_commit.message, 'tag release version:')
     steps:
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -56,24 +56,15 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           thresholdAll: 0.70
 
-      - name: setup java
-        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
-        with:
-          distribution: "corretto"
-          java-version: "17"
-
-      - name: provision sonar-scanner
+      - name: prepare sonar reports
+        if: success() || failure()
         run: |
-          export SONAR_VERSION="5.0.1.3006"
-          wget -q --max-redirect=0 "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
-          unzip -q ./sonar-scanner.zip
-          mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
+          cat sonar-project.properties
           scripts/sonar_tests.py
 
-      - name: run sonar scan
-        run: |
-          PATH="$PWD/sonar-scanner/bin:$PATH"
-          sonar-scanner
+      - name: sonar scan
+        if: success() || failure()
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

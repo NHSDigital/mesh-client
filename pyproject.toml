@@ -41,7 +41,7 @@ mock = "^5.0.2"
 build = "^1.0.3"
 toml = "^0.10.2"
 tox = "^4.6.3"
-types-setuptools = ">=80,<83"
+types-setuptools = ">=80,<84"
 coverage = "^7.2.7"
 pytest = ">=7.4,<10.0"
 importlib-metadata = {version = ">=4.11.4", python = "<3.12"}

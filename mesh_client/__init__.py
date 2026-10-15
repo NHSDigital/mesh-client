@@ -1,6 +1,6 @@
 import collections
 import contextlib
-import datetime
+import datetime as dt
 import functools
 import hmac
 import os.path
@@ -261,11 +261,11 @@ class SSLContextAdapter(HTTPAdapter):
 
         context.minimum_version = ssl.TLSVersion.TLSv1_2
 
-        if self.cert and isinstance(self.cert, (tuple, list)):
+        if self.cert and isinstance(self.cert, tuple | list):
             context.load_cert_chain(*self.cert)
 
         if self.verify:
-            if isinstance(self.verify, (str, bytes)):
+            if isinstance(self.verify, str | bytes):
                 context.load_verify_locations(self.verify)
 
             if self.check_hostname is not None:
@@ -1068,7 +1068,7 @@ class AuthTokenGenerator:
             return token
 
     def generate_token(self) -> str:
-        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M")
+        now = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M")
         public_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{now}"
         private_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{self._password}:{now}"
         myhash = hmac.HMAC(self._key, private_auth_data.encode("ASCII"), sha256).hexdigest()

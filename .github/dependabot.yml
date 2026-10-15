@@ -10,12 +10,40 @@ updates:
     directory: "/"
     open-pull-requests-limit: 2
     schedule:
-      interval: "monthly"
+      interval: "daily"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "github actions "
       include: scope
+    groups:
+      patch-and-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
 
   - package-ecosystem: "pip"
     directory: "/" # Location of package manifests
     schedule:
-      interval: "monthly"
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    groups:
+      patch-and-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"

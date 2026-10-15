@@ -1,38 +1,25 @@
 # Security
 
-NHS England takes security and the protection of private data extremely
-seriously. If you believe you have found a vulnerability or other issue which
-has compromised or could compromise the security of any of our systems and/or
-private data managed by our systems, please do not hesitate to contact us using
-the methods outlined below.
+We take security and the protection of private data extremely seriously. If you believe you have found a vulnerability or other issue which has compromised or could compromise the security of any of our systems or private data managed by our systems, please do not hesitate to contact us using the method outlined below.
 
-## Reporting a vulnerability
-**PLEASE NOTE: Email and HackerOne are our preferred methods of receiving
-reports.**
+## Table of contents
 
-### Email
-If you wish to notify us of a vulnerability via email, please include detailed
-information on the nature of the vulnerability and any steps required to
-reproduce it.
+- [Security](#security)
+  - [Responsible Disclosure](#responsible-disclosure)
+  - [Scope](#scope)
+  - [Response Process/Expectations](response-process-and-expectations)
+  - [Report a cyber security incident](report-a-cyber-security-incident)
 
-You can reach us at:
-* cybersecurity@nhs.net
-* api.management@nhs.net
+## Responsible Disclosure
 
-### HackerOne
-If you are registered with HackerOne and have been admitted to the NHS
-Programme, you can report directly to us at: https://hackerone.com/nhs
+To learn more about responsible disclosure of security incidents you can read our [Security vulnerability disclosure policy](https://digital.nhs.uk/cyber-and-data-security/security-vulnerability-disclosure). This policy covers things like the scope and response SLAs
 
-### NCSC
-You can send your report to the National Cyber Security Centre, who will assess
-your report and pass it on to NHS England if necessary.
+## Report a cyber security incident
 
-You can report vulnerabilities here:
-https://www.ncsc.gov.uk/information/vulnerability-reporting
+Request immediate support for a cyber security issue - call [0300 303 5222](tel:0300 303 5222) (monitored 24/7).
 
-### OpenBugBounty
-We also accept bug reports via OpenBugBounty: https://www.openbugbounty.org/
+Report an urgent cyber security issue by [logging a ServiceNow ticket](https://nhsdigitallive.service-now.com/csm?id=sc_cat_item&sys_id=0122c5351b280110892d4046b04bcb16&referrer=recent_items) and attaching all relevant details. 
 
-## General Security Enquiries
-If you have general enquiries regarding our cyber security, please reach out
-to us at cybersecurity@nhs.net
+If you have found a vulnerability in an NHS system, [report it via our Vulnerability Disclosure Programme](https://digital.nhs.uk/cyber-and-data-security/security-vulnerability-disclosure).
+
+For general cyber operations queries email [cybersecurity@nhs.net](mailto:cybersecurity@nhs.net).

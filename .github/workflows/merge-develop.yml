@@ -11,17 +11,17 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client' && !contains(github.event.head_commit.message, 'tag release version:')
     steps:
       - name: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4
         with:
           poetry-version: 2.1.3
 
@@ -30,7 +30,7 @@ jobs:
           poetry self add "poetry-dynamic-versioning[plugin]"
 
       - name: cache virtualenv
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .venv
@@ -50,40 +50,28 @@ jobs:
 
       - name: code coverage report
         if: ${{ github.event_name == 'pull_request' }}
-        uses: orgoro/coverage@3f13a558c5af7376496aa4848bf0224aead366ac
+        uses: orgoro/coverage@71cf993a407154ad9d8dd027c88a374b0ed002a9 # v3.3
         with:
           coverageFile: reports/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           thresholdAll: 0.70
 
-      - name: setup java
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/setup-java@v5
-        with:
-          distribution: "corretto"
-          java-version: "17"
-
-      - name: provision sonar-scanner
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
+      - name: prepare sonar reports
+        if: success() || failure()
         run: |
-          export SONAR_VERSION="5.0.1.3006"
-          wget -q --max-redirect=0 "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
-          unzip -q ./sonar-scanner.zip
-          mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
+          cat sonar-project.properties
           scripts/sonar_tests.py
 
-      - name: run sonar scan
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        run: |
-          PATH="$PWD/sonar-scanner/bin:$PATH"
-          sonar-scanner
+      - name: sonar scan
+        if: success() || failure()
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: publish junit reports
         if: success() || failure()
-        uses: mikepenz/action-junit-report@e08919a3b1fb83a78393dfb775a9c37f17d8eea6
+        uses: mikepenz/action-junit-report@b7b80d7ac5b1da46d6aaff9fb57ad50d8453bcb3 # v6.6.0
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml

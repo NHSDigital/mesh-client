@@ -15,7 +15,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -41,7 +41,7 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -49,7 +49,7 @@ jobs:
         run: make up
 
       - name: install dependencies
-        run: pip install tox tox-gh-actions
+        run: pip install --prefer-binary tox==4.58.0 tox-gh-actions==3.5.0
 
       - name: tox
         run: tox
@@ -61,10 +61,13 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -93,12 +96,12 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4
         with:
           poetry-version: 2.1.3
 
@@ -107,7 +110,7 @@ jobs:
           poetry self add "poetry-dynamic-versioning[plugin]"
 
       - name: cache virtualenv
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .venv
@@ -130,38 +133,21 @@ jobs:
 
       - name: code coverage report
         if: ${{ github.event_name == 'pull_request' }}
-        uses: orgoro/coverage@3f13a558c5af7376496aa4848bf0224aead366ac
+        uses: orgoro/coverage@71cf993a407154ad9d8dd027c88a374b0ed002a9 # v3.3
         with:
           coverageFile: reports/coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           thresholdAll: 0.70
 
-      - name: setup java
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/setup-java@v5
-        with:
-          distribution: "corretto"
-          java-version: "17"
-
-      - name: provision sonar-scanner
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
+      - name: prepare sonar reports
+        if: success() || failure()
         run: |
-          export SONAR_VERSION="5.0.1.3006"
-          wget -q --max-redirect=0 "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_VERSION}.zip" -O sonar-scanner.zip
-          unzip -q ./sonar-scanner.zip
-          mv ./sonar-scanner-${SONAR_VERSION} ./sonar-scanner
+          cat sonar-project.properties
           scripts/sonar_tests.py
 
-      - name: run sonar scan
-        if: github.actor != 'dependabot[bot]' && (success() || failure())
-        run: |
-          PATH="$PWD/sonar-scanner/bin:$PATH"
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            git checkout "${GITHUB_HEAD_REF}"
-            sonar-scanner -Dsonar.pullrequest.branch="{{ github.event.pull_request.head.sha }}" -Dsonar.pullrequest.base="{{ github.event.pull_request.base.sha }}" -Dsonar.pullrequest.key="${{ github.event.number }}"
-          else
-            sonar-scanner
-          fi
+      - name: sonar scan
+        if: success() || failure()
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -169,14 +155,14 @@ jobs:
 
       - name: archive reports
         if: github.actor != 'dependabot[bot]' && (success() || failure())
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: reports
           path: reports/**/*
 
       - name: publish junit reports
         if: success() || failure()
-        uses: mikepenz/action-junit-report@e08919a3b1fb83a78393dfb775a9c37f17d8eea6
+        uses: mikepenz/action-junit-report@b7b80d7ac5b1da46d6aaff9fb57ad50d8453bcb3 # v6.6.0
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml
@@ -190,7 +176,7 @@ jobs:
     if: github.repository == 'NHSDigital/mesh-client'
     steps:
       - name: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -211,12 +197,12 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4
         with:
           poetry-version: 2.1.3
 
@@ -225,7 +211,7 @@ jobs:
           poetry self add "poetry-dynamic-versioning[plugin]"
 
       - name: cache virtualenv
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .venv
@@ -247,7 +233,7 @@ jobs:
         run: make mypy
 
       - name: shellcheck
-        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # v2.0.0
         with:
           ignore_paths: .venv build
           ignore_names: git-secrets
@@ -270,7 +256,7 @@ jobs:
       - tox
     steps:
       - name: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -296,12 +282,12 @@ jobs:
           git merge --ff-only "${{ github.event.pull_request.head.sha }}"
 
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: 'pyproject.toml'
 
       - name: setup poetry
-        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1
+        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4
         with:
           poetry-version: 2.1.3
 
@@ -323,7 +309,7 @@ jobs:
           ls -l dist
 
       - name: test publish
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           password: ${{ secrets.TEST_PYPI_TOKEN }}
           repository-url: https://test.pypi.org/legacy/
@@ -333,11 +319,45 @@ jobs:
 
       - name: install and test
         run: |
-          poetry export -f requirements.txt -o requirements.txt
-          python3 -m pip install -r requirements.txt
-          python3 -m pip install --index-url https://test.pypi.org/simple/ "mesh-client==${RELEASE_VERSION}"
+          poetry export --only main -f requirements.txt -o requirements.txt
+          python3 -m pip install --only-binary :all: --require-hashes -r requirements.txt
+          python3 -m pip install --only-binary :all: --index-url https://test.pypi.org/simple/ "mesh-client==${RELEASE_VERSION}"
           INSTALLED_VERSION="$(python3 -c 'import mesh_client; print(mesh_client.__version__)')"
           if [[ "${INSTALLED_VERSION}" != "${RELEASE_VERSION}" ]]; then
             echo "${INSTALLED_VERSION} != ${RELEASE_VERSION}"
             exit 1
           fi
+
+  slack-notification:
+    runs-on: ubuntu-latest
+    needs:
+      - coverage
+      - lint
+      - tox
+    if: ${{ always() && github.repository == 'NHSDigital/mesh-client' && github.actor == 'dependabot[bot]' && contains(needs.*.result, 'failure') }}
+    steps:
+      - name: Slack Notification
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          webhook: ${{ secrets.DEPENDABOT_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": ":alarm: DEPENDABOT PR FAILED :alarm:",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Checks failed for ${{ github.repository }}:${{ github.ref }} in <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR #${{ github.event.number }}>"
+                  }
+                }
+              ]
+            }

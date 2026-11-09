@@ -1068,7 +1068,7 @@ class AuthTokenGenerator:
             return token
 
     def generate_token(self) -> str:
-        now = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M")
+        now = dt.datetime.now(dt.UTC).strftime("%Y%m%d%H%M")
         public_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{now}"
         private_auth_data = f"{self._mailbox}:{self._nonce}:{self._nonce_count}:{self._password}:{now}"
         myhash = hmac.HMAC(self._key, private_auth_data.encode("ASCII"), sha256).hexdigest()

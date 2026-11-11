@@ -14,6 +14,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
 ]
 
 # including this would turn on pyproject.toml for setuptools and fail validation
@@ -25,7 +26,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 # core dependencies
-python = ">=3.11,<3.15.0"
+python = ">=3.11,<3.16.0"
 urllib3 = ">=1.25.4"
 requests = ">=2.32.0,<3.0.0"
 werkzeug = ">=3.0.3,<4.0.0"
@@ -146,7 +147,7 @@ show_missing = true
 output = "reports/coverage.xml"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.15"
 warn_return_any = true
 warn_unused_configs = true
 show_error_codes = true

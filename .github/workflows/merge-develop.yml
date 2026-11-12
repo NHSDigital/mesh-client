@@ -23,7 +23,7 @@ jobs:
       - name: setup poetry
         uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4
         with:
-          poetry-version: 2.1.3
+          poetry-version: 2.5.1
 
       - name: add poetry plugins
         run: |
@@ -64,14 +64,14 @@ jobs:
 
       - name: sonar scan
         if: success() || failure()
-        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8.4.0
+        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: publish junit reports
         if: success() || failure()
-        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6.6.1
+        uses: mikepenz/action-junit-report@4a26df3e2ae132254ba12a53f65a388d0961e786 # v6.7.0
         with:
           check_name: junit reports
           report_paths: reports/junit/*.xml

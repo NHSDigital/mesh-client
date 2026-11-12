@@ -103,7 +103,7 @@ jobs:
       - name: setup poetry
         uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4
         with:
-          poetry-version: 2.1.3
+          poetry-version: 2.5.1
 
       - name: add poetry plugins
         run: |
@@ -204,7 +204,7 @@ jobs:
       - name: setup poetry
         uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4
         with:
-          poetry-version: 2.1.3
+          poetry-version: 2.5.1
 
       - name: add poetry plugins
         run: |
@@ -289,7 +289,7 @@ jobs:
       - name: setup poetry
         uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4
         with:
-          poetry-version: 2.1.3
+          poetry-version: 2.5.1
 
       - name: add poetry plugins
         run: |

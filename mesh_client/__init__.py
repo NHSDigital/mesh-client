@@ -369,7 +369,9 @@ class MeshClient:
             if endpoint_config:
                 url = endpoint_config
 
-        self._url = (url.url if hasattr(url, "url") else url).rstrip("/")
+        self._url = (url.url if hasattr(url, "url") else url)
+        if not self._url.endswith("/"):
+            self._url += "/"
 
         if verify is None and hasattr(url, "verify"):
             verify = url.verify

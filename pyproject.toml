@@ -50,7 +50,7 @@ ruff = ">=0,<1"
 boto3 = "^1.33.7"
 
 [tool.poetry.group.local.dependencies]
-ipython = "^8.14.0"
+ipython = ">=8.14,<10.0"
 
 [tool.ruff]
 lint.select = [
